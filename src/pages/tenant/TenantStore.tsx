@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { useTenant } from '@/hooks/useTenant';
+import { getMainSiteUrl } from '@/lib/domain';
 import TenantNavbar from './TenantNavbar';
 import TenantFooter from './TenantFooter';
 import TenantHome from './TenantHome';
@@ -38,7 +39,7 @@ export default function TenantStore() {
         <p className="text-sm text-foreground-500 text-center max-w-md mb-6">
           Cette boutique n&apos;existe pas ou a &eacute;t&eacute; d&eacute;sactiv&eacute;e.
         </p>
-        <a href="https://zifek.fr" className="px-6 py-2.5 bg-primary-500 text-background-50 rounded-full text-sm font-medium cursor-pointer no-underline whitespace-nowrap">
+        <a href={getMainSiteUrl()} className="px-6 py-2.5 bg-primary-500 text-background-50 rounded-full text-sm font-medium cursor-pointer no-underline whitespace-nowrap">
           Retour &agrave; Zifek
         </a>
       </div>

@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, isSuperAdmin, type RegisterData } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { APP_DOMAIN, buildSubdomainHost } from '@/lib/domain';
+import { validateUsername } from '@/lib/username';
+import { useUsernameAvailability } from '@/hooks/useUsernameAvailability';
 import Navbar from '@/pages/home/components/Navbar';
 import Footer from '@/pages/home/components/Footer';
 
@@ -118,11 +121,18 @@ export default function RegisterPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const usernameValidation = validateUsername(formData.user_name);
+  const { status: usernameStatus, message: usernameStatusMessage } = useUsernameAvailability(formData.user_name);
+
   const handleNext = () => {
     setError('');
     if (step === 1) {
       if (!formData.name || !formData.email || !formData.user_name) {
         setError('Veuillez remplir tous les champs obligatoires.');
+        return;
+      }
+      if (!usernameValidation.valid) {
+        setError(usernameValidation.error || 'Nom d\u2019utilisateur invalide.');
         return;
       }
       if (formData.password.length < 6) {
@@ -372,12 +382,32 @@ export default function RegisterPage() {
                             className="flex-1 h-11 px-4 bg-transparent text-sm text-foreground-950 placeholder:text-foreground-400 focus:outline-none"
                           />
                           <span className="h-11 flex items-center px-4 bg-background-100 border-l border-background-200/70 text-sm text-foreground-400 font-medium whitespace-nowrap select-none">
-                            .zifek.fr
+                            .{APP_DOMAIN}
                           </span>
                         </div>
-                        {formData.user_name && (
+                        {formData.user_name && !usernameValidation.valid && (
+                          <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                            <i className="ri-error-warning-line"></i>{usernameValidation.error}
+                          </p>
+                        )}
+                        {formData.user_name && usernameValidation.valid && usernameStatus === 'checking' && (
+                          <p className="text-xs text-foreground-400 mt-1.5 flex items-center gap-1">
+                            <i className="ri-loader-4-line animate-spin"></i>V&eacute;rification de la disponibilit&eacute;...
+                          </p>
+                        )}
+                        {formData.user_name && usernameValidation.valid && usernameStatus === 'taken' && (
+                          <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                            <i className="ri-close-circle-line"></i>{usernameStatusMessage || 'Ce nom est d\u00e9j\u00e0 pris.'}
+                          </p>
+                        )}
+                        {formData.user_name && usernameValidation.valid && usernameStatus === 'available' && (
+                          <p className="text-xs text-emerald-600 mt-1.5 flex items-center gap-1">
+                            <i className="ri-checkbox-circle-line"></i>Disponible ! Votre site : <strong>{buildSubdomainHost(usernameValidation.normalized)}</strong>
+                          </p>
+                        )}
+                        {formData.user_name && usernameValidation.valid && usernameStatus === 'idle' && (
                           <p className="text-xs text-foreground-400 mt-1.5">
-                            Votre site sera accessible sur : <strong className="text-foreground-600">{formData.user_name}.zifek.fr</strong>
+                            Votre site sera accessible sur : <strong className="text-foreground-600">{buildSubdomainHost(usernameValidation.normalized)}</strong>
                           </p>
                         )}
                       </div>

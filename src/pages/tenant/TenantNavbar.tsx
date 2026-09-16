@@ -2,6 +2,7 @@ import { useTenant } from '@/hooks/useTenant';
 import { Link, useLocation } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { getMainSiteUrl } from '@/lib/domain';
 
 // ── Default page definitions ──────────────────────────────────
 const DEFAULT_PAGES = [
@@ -273,14 +274,14 @@ export default function TenantNavbar() {
                           <p className="text-[10px] text-foreground-500 truncate">{user.email}</p>
                         </div>
                         <a
-                          href="https://zifek.fr/mon-compte"
+                          href={`${getMainSiteUrl()}/mon-compte`}
                           className="flex items-center gap-2 px-3 py-2 text-xs text-foreground-700 hover:bg-background-100 cursor-pointer no-underline transition-colors"
                         >
                           <i className="ri-dashboard-line text-sm text-accent-500"></i>
                           Mon espace Zifek
                         </a>
                         <a
-                          href="https://zifek.fr/mon-compte"
+                          href={`${getMainSiteUrl()}/mon-compte`}
                           className="flex items-center gap-2 px-3 py-2 text-xs text-foreground-700 hover:bg-background-100 cursor-pointer no-underline transition-colors"
                         >
                           <i className="ri-t-shirt-line text-sm text-accent-500"></i>
@@ -303,7 +304,7 @@ export default function TenantNavbar() {
                   </>
                 ) : (
                   <a
-                    href="https://zifek.fr/login-client"
+                    href={`${getMainSiteUrl()}/login-client`}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium cursor-pointer transition-colors whitespace-nowrap no-underline bg-accent-500 text-background-50 hover:bg-accent-600"
                   >
                     <i className="ri-user-line text-sm"></i>

@@ -5,6 +5,7 @@ import i18n from "./i18n";
 import { AuthProvider } from "./hooks/useAuth";
 import { TenantProvider, useTenant } from "./hooks/useTenant";
 import { BrandProvider } from "./hooks/useBrand";
+import { HomepageContentProvider } from "./hooks/useHomepageContent";
 import TenantStore from "./pages/tenant/TenantStore";
 
 function AppShell() {
@@ -29,11 +30,13 @@ function AppShell() {
 
   // Main Zifek site (zifek.fr)
   return (
-    <BrandProvider>
-      <BrowserRouter basename={__BASE_PATH__}>
-        <AppRoutes />
-      </BrowserRouter>
-    </BrandProvider>
+    <HomepageContentProvider>
+      <BrandProvider>
+        <BrowserRouter basename={__BASE_PATH__}>
+          <AppRoutes />
+        </BrowserRouter>
+      </BrandProvider>
+    </HomepageContentProvider>
   );
 }
 

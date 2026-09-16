@@ -3,6 +3,10 @@ import './i18n'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { enforceHttps } from './lib/domain'
+
+// Redirige HTTP → HTTPS avant le rendu (sécurité + cohérence des URLs)
+enforceHttps()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

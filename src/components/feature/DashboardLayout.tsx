@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useBrand } from '@/hooks/useBrand';
 import { supabase } from '@/lib/supabase';
+import { buildSubdomain } from '@/lib/domain';
 
 interface AppLink {
   nompage: string;
@@ -55,11 +56,6 @@ const DEVICE_SIZES: Record<PreviewDevice, { width: string; height: string; label
   tablet: { width: '768px', height: '900px', label: 'Tablette', icon: 'ri-tablet-line' },
   desktop: { width: '100%', height: '100%', label: 'Desktop', icon: 'ri-computer-line' },
 };
-
-function buildSubdomain(userName: string): string {
-  const slug = userName.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9-]/g, '');
-  return `https://${slug}.zifek.fr`;
-}
 
 function cleanDisplayUrl(url: string): string {
   return url.replace(/^https?:\/\//, '');

@@ -1,40 +1,10 @@
 import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useHomepageContent } from '@/hooks/useHomepageContent';
 
 export default function HowItWorks() {
+  const { content } = useHomepageContent();
+  const steps = content.how_it_works;
   const { ref: sectionRef, isVisible } = useScrollReveal(0.15);
-
-  const steps = [
-    {
-      number: '01',
-      icon: 'ri-rocket-2-line',
-      title: 'Créez votre boutique',
-      description:
-        "Décrivez votre activité en quelques mots. L'IA de ZIFEK génère automatiquement votre site e-commerce complet avec vos produits, votre design et votre identité visuelle.",
-      image:
-        'https://readdy.ai/api/search-image?query=Modern%20AI-powered%20website%20builder%20interface%20with%20floating%20UI%20cards%20and%20colorful%20dashboard%20elements%20warm%20coral%20and%20cream%20tones%20minimal%20clean%20design%20soft%20ambient%20lighting%20professional%20SaaS%20product%20illustration%20no%20text%20no%20people%20digital%20art&width=500&height=350&seq=zifek-step-01&orientation=landscape',
-      color: 'primary',
-    },
-    {
-      number: '02',
-      icon: 'ri-paint-brush-line',
-      title: 'Personnalisez votre univers',
-      description:
-        "Choisissez parmi des dizaines de thèmes professionnels, ajoutez vos produits physiques ou numériques, configurez vos moyens de paiement et votre domaine personnalisé.",
-      image:
-        'https://readdy.ai/api/search-image?query=Elegant%20ecommerce%20theme%20customization%20dashboard%20with%20color%20palette%20and%20product%20cards%20warm%20terracotta%20and%20cream%20tones%20minimal%20modern%20UI%20design%20soft%20lighting%20professional%20digital%20art%20creative%20workspace%20aesthetic%20no%20text&width=500&height=350&seq=zifek-step-02&orientation=landscape',
-      color: 'accent',
-    },
-    {
-      number: '03',
-      icon: 'ri-line-chart-line',
-      title: 'Vendez et développez',
-      description:
-        "Lancez votre boutique, acceptez les paiements, gérez vos commandes et suivez vos performances. ZIFEK s'occupe de la technique, vous vous concentrez sur votre business.",
-      image:
-        'https://readdy.ai/api/search-image?query=Growing%20business%20analytics%20dashboard%20with%20rising%20charts%20and%20sales%20metrics%20warm%20golden%20and%20cream%20tones%20minimal%20modern%20design%20soft%20ambient%20lighting%20professional%20digital%20art%20success%20and%20growth%20visualization%20no%20text%20no%20people&width=500&height=350&seq=zifek-step-03&orientation=landscape',
-      color: 'secondary',
-    },
-  ];
 
   const getColorClasses = (color: string) => {
     switch (color) {
@@ -89,29 +59,39 @@ export default function HowItWorks() {
             isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
           }`}
         >
-          <span className="inline-block px-3 py-1.5 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold mb-5">
-            Simple et rapide
-          </span>
+          {steps.badge && (
+            <span className="inline-block px-3 py-1.5 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold mb-5">
+              {steps.badge}
+            </span>
+          )}
           <h2 className="text-3xl md:text-5xl font-bold font-heading text-foreground-950 mb-4">
-            Comment ça marche ?
+            {steps.title}
           </h2>
-          <p className="text-foreground-500 text-base md:text-lg max-w-xl mx-auto">
-            Lancez votre business en ligne en 3 étapes. Sans compétence technique, sans code.
-          </p>
+          {steps.subtitle && (
+            <p className="text-foreground-500 text-base md:text-lg max-w-xl mx-auto">
+              {steps.subtitle}
+            </p>
+          )}
         </div>
 
         <div className="relative">
           {/* connecting line - desktop only */}
-          <div className="hidden lg:block absolute top-[72px] left-[calc(16.67%+40px)] right-[calc(16.67%+40px)] h-[2px]">
-            <div className="w-full h-full bg-gradient-to-r from-primary-200 via-accent-200 to-secondary-200 rounded-full" />
-          </div>
+          {steps.items.length > 1 && (
+            <div className="hidden lg:block absolute top-[72px] left-[calc(16.67%+40px)] right-[calc(16.67%+40px)] h-[2px]">
+              <div className="w-full h-full bg-gradient-to-r from-primary-200 via-accent-200 to-secondary-200 rounded-full" />
+            </div>
+          )}
 
           {/* connecting dots */}
-          <div className="hidden lg:flex absolute top-[68px] left-[33.33%] -translate-x-1/2 w-3 h-3 rounded-full bg-primary-400 z-10" />
-          <div className="hidden lg:flex absolute top-[68px] left-[66.66%] -translate-x-1/2 w-3 h-3 rounded-full bg-accent-400 z-10" />
+          {steps.items.length > 2 && (
+            <>
+              <div className="hidden lg:flex absolute top-[68px] left-[33.33%] -translate-x-1/2 w-3 h-3 rounded-full bg-primary-400 z-10" />
+              <div className="hidden lg:flex absolute top-[68px] left-[66.66%] -translate-x-1/2 w-3 h-3 rounded-full bg-accent-400 z-10" />
+            </>
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 md:gap-8 lg:gap-10">
-            {steps.map((step, index) => {
+            {steps.items.map((step, index) => {
               const colors = getColorClasses(step.color);
               return (
                 <div
@@ -149,7 +129,7 @@ export default function HowItWorks() {
                     {/* progress dot - mobile only */}
                     <div className="md:hidden absolute top-4 left-4 flex items-center gap-2">
                       <div className={`w-2.5 h-2.5 rounded-full ${colors.dot}`} />
-                      {index < 2 && (
+                      {index < steps.items.length - 1 && (
                         <div className="w-8 h-[2px] bg-background-200 rounded-full" />
                       )}
                     </div>
@@ -174,16 +154,18 @@ export default function HowItWorks() {
         </div>
 
         {/* bottom CTA hint */}
-        <div
-          className={`text-center mt-12 md:mt-16 transition-all duration-700 delay-500 ${
-            isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
-          }`}
-        >
-          <p className="text-foreground-400 text-sm flex items-center justify-center gap-2">
-            <i className="ri-time-line"></i>
-            La plupart des boutiques sont opérationnelles en moins de 10 minutes
-          </p>
-        </div>
+        {steps.footerHint && (
+          <div
+            className={`text-center mt-12 md:mt-16 transition-all duration-700 delay-500 ${
+              isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'
+            }`}
+          >
+            <p className="text-foreground-400 text-sm flex items-center justify-center gap-2">
+              <i className="ri-time-line"></i>
+              {steps.footerHint}
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );

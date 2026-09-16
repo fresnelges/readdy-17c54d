@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { parseCharte, generatePalette, type ChartPalette, paletteToCssVars } from '@/lib/palette';
+import { APP_DOMAIN, MAIN_DOMAINS } from '@/lib/domain';
 
 // ── Tenant types ──────────────────────────────────────────────
 
@@ -89,15 +90,15 @@ function extractSubdomain(): string | null {
   if (typeof window === 'undefined') return null;
   const hostname = window.location.hostname.toLowerCase().replace(/^www\./, '');
 
-  // Known main domains for Zifek
-  const mainDomains = ['zifek.fr', 'localhost', '127.0.0.1', 'readdy.ai'];
+  // Domaines principaux reconnus (site Zifek, pas une boutique)
+  const mainDomains = MAIN_DOMAINS;
 
   // Check if hostname exactly matches a main domain
   if (mainDomains.some(d => hostname === d)) return null;
 
-  // Check if it's a subdomain of zifek.fr (e.g. monboutique.zifek.fr)
-  if (hostname.endsWith('.zifek.fr')) {
-    const sub = hostname.replace('.zifek.fr', '');
+  // Check if it's a subdomain of the main domain (e.g. monboutique.zifek.fr)
+  if (hostname.endsWith(`.${APP_DOMAIN}`)) {
+    const sub = hostname.replace(`.${APP_DOMAIN}`, '');
     if (sub === '' || sub === 'www') return null;
     return sub;
   }
@@ -131,6 +132,7 @@ async function resolveCustomDomain(hostname: string): Promise<{ userId: number; 
       .from('websitedomain')
       .select('user_id, domaine')
       .eq('domaine', candidate)
+      .eq('verified', true)
       .maybeSingle();
     if (data) return { userId: data.user_id, domain: data.domaine };
   }
@@ -139,6 +141,7 @@ async function resolveCustomDomain(hostname: string): Promise<{ userId: number; 
   const { data: fuzzy } = await supabase
     .from('websitedomain')
     .select('user_id, domaine')
+    .eq('verified', true)
     .or(`domaine.eq.${cleanHost},domaine.eq.www.${cleanHost}`)
     .maybeSingle();
   if (fuzzy) return { userId: fuzzy.user_id, domain: fuzzy.domaine };
@@ -180,7 +183,7 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         const { data: users } = await supabase
           .from('users')
           .select('*')
-          .eq('user_name', subdomain)
+          .ilike('user_name', subdomain)
           .eq('active', 1)
           .limit(1);
 
@@ -219,6 +222,20 @@ export function TenantProvider({ children }: { children: ReactNode }) {
         const custom = await resolveCustomDomain(hostname);
         if (custom) {
           customDomain = custom.domain;
+
+          // Redirection automatique www ↔ racine vers le domaine canonique saisi
+          const currentHost = getFullHostname();
+          const canonicalHost = custom.domain.toLowerCase().replace(/\/+$/, '');
+          const stripWww = (h: string) => h.replace(/^www\./, '');
+          if (
+            currentHost !== canonicalHost &&
+            stripWww(currentHost) === stripWww(canonicalHost)
+          ) {
+            const redirectUrl = `https://${canonicalHost}${window.location.pathname}${window.location.search}${window.location.hash}`;
+            window.location.replace(redirectUrl);
+            return;
+          }
+
           const { data: users } = await supabase
             .from('users')
             .select('*')

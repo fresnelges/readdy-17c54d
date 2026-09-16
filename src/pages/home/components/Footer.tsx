@@ -1,12 +1,16 @@
 import { Link } from 'react-router-dom';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useHomepageContent } from '@/hooks/useHomepageContent';
+import type { FooterLink } from '@/lib/homepageContent';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [error, setError] = useState('');
   const { user } = useAuth();
+  const { content } = useHomepageContent();
+  const footer = content.footer;
 
   const handleNewsletter = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +41,30 @@ export default function Footer() {
     if (el) el.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const renderFooterLink = (link: FooterLink, i: number) => {
+    if (link.href.startsWith('#')) {
+      return (
+        <button
+          key={i}
+          onClick={() => scrollToSection(link.href.slice(1))}
+          className="text-sm text-background-50/50 hover:text-background-50 transition-colors cursor-pointer"
+        >
+          {link.label}
+        </button>
+      );
+    }
+    return (
+      <a
+        key={i}
+        href={link.href}
+        className="text-sm text-background-50/50 hover:text-background-50 transition-colors cursor-pointer"
+        rel="nofollow"
+      >
+        {link.label}
+      </a>
+    );
+  };
+
   return (
     <footer className="relative bg-foreground-950 text-background-50">
       <div className="w-full px-4 md:px-6 lg:px-10 max-w-7xl mx-auto py-14 md:py-20">
@@ -51,20 +79,13 @@ export default function Footer() {
               </span>
             </Link>
             <p className="text-background-50/50 text-sm leading-relaxed max-w-sm mb-6">
-              La plateforme SaaS tout-en-un pour créer votre business en ligne.
-              E-commerce, services, marketplace, réservations. Sans code,
-              boosté à l'IA.
+              {footer.aboutText}
             </p>
             <div className="flex items-center gap-3">
-              {[
-                { icon: 'ri-facebook-line', label: 'Facebook' },
-                { icon: 'ri-instagram-line', label: 'Instagram' },
-                { icon: 'ri-tiktok-line', label: 'TikTok' },
-                { icon: 'ri-linkedin-line', label: 'LinkedIn' },
-              ].map((social, i) => (
+              {footer.socials.map((social, i) => (
                 <a
                   key={i}
-                  href="#"
+                  href={social.url}
                   className="w-9 h-9 rounded-full border border-background-50/15 flex items-center justify-center text-background-50/50 hover:text-background-50 hover:border-background-50/30 transition-colors cursor-pointer"
                   aria-label={social.label}
                   rel="nofollow"
@@ -75,84 +96,18 @@ export default function Footer() {
             </div>
           </div>
 
-          <div className="lg:col-span-2 lg:col-start-6">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-background-50/30 mb-4">
-              Plateforme
-            </h4>
-            <ul className="space-y-2.5">
-              {[
-                { label: 'Fonctionnalités', id: 'features' },
-                { label: 'Tarifs', id: 'pricing' },
-                { label: 'Solutions', id: 'activities' },
-                { label: 'Thèmes', href: '#' },
-                { label: 'Applications', href: '#' },
-              ].map((item, i) => (
-                <li key={i}>
-                  {item.id ? (
-                    <button
-                      onClick={() => scrollToSection(item.id!)}
-                      className="text-sm text-background-50/50 hover:text-background-50 transition-colors cursor-pointer"
-                    >
-                      {item.label}
-                    </button>
-                  ) : (
-                    <a
-                      href={item.href}
-                      className="text-sm text-background-50/50 hover:text-background-50 transition-colors cursor-pointer"
-                      rel="nofollow"
-                    >
-                      {item.label}
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="lg:col-span-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-background-50/30 mb-4">
-              Ressources
-            </h4>
-            <ul className="space-y-2.5">
-              {['Blog', 'Documentation', 'API', 'Communauté', 'Status'].map(
-                (item, i) => (
-                  <li key={i}>
-                    <a
-                      href="#"
-                      className="text-sm text-background-50/50 hover:text-background-50 transition-colors cursor-pointer"
-                      rel="nofollow"
-                    >
-                      {item}
-                    </a>
-                  </li>
-                )
-              )}
-            </ul>
-          </div>
-
-          <div className="lg:col-span-2">
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-background-50/30 mb-4">
-              Entreprise
-            </h4>
-            <ul className="space-y-2.5">
-              {[
-                { label: 'À propos', href: '#' },
-                { label: 'Contact', href: '#' },
-                { label: 'Carrières', href: '#' },
-                { label: 'Presse', href: '#' },
-              ].map((item, i) => (
-                <li key={i}>
-                  <a
-                    href={item.href}
-                    className="text-sm text-background-50/50 hover:text-background-50 transition-colors cursor-pointer"
-                    rel="nofollow"
-                  >
-                    {item.label}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>
+          {footer.columns.map((column, ci) => (
+            <div key={ci} className={`lg:col-span-2 ${ci === 0 ? 'lg:col-start-6' : ''}`}>
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-background-50/30 mb-4">
+                {column.title}
+              </h4>
+              <ul className="space-y-2.5">
+                {column.links.map((link, i) => (
+                  <li key={i}>{renderFooterLink(link, i)}</li>
+                ))}
+              </ul>
+            </div>
+          ))}
 
           <div className="lg:col-span-2">
             <h4 className="text-xs font-semibold uppercase tracking-wider text-background-50/30 mb-4">
@@ -204,7 +159,7 @@ export default function Footer() {
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
               <p className="text-xs text-background-50/30">
-                © {new Date().getFullYear()} ZIFEK. Tous droits réservés.
+                © {new Date().getFullYear()} {footer.copyrightText}
               </p>
               <div className="flex items-center gap-4">
                 <a

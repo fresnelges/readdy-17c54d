@@ -2,12 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getMainSiteUrl } from '@/lib/domain';
 import { uploadMediaFile } from '@/hooks/useUpload';
 import JSZip from 'jszip';
 import ImportThemeModal from './components/ImportThemeModal';
 import ConvertThemeModal from './components/ConvertThemeModal';
 import LivePreviewPanel from './components/LivePreviewPanel';
 import VersionHistory from './components/VersionHistory';
+import ThemeImageField from './components/ThemeImageField';
 import { getDefaultPageContent } from './defaultPageContent';
 
 // ============ TYPES ============
@@ -1220,7 +1222,7 @@ theme.zip
 
 ---
 
-Développé avec [Zifek Theme Builder](https://zifek.fr)
+Développé avec [Zifek Theme Builder](${getMainSiteUrl()})
 `;
       zip.file('README.md', readmeContent);
 
@@ -2081,13 +2083,12 @@ Réponds UNIQUEMENT avec l'objet JSON, pas de texte avant ou après.`;
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-foreground-600 mb-1">Image bannière navigation (URL)</label>
-                          <input
-                            type="text"
+                          <ThemeImageField
+                            label="Image bannière navigation"
                             value={themeContenu?.imagebannierenavmenudefault || ''}
-                            onChange={(e) => setThemeContenu(prev => prev ? { ...prev, imagebannierenavmenudefault: e.target.value } : null)}
+                            onChange={(url) => setThemeContenu(prev => prev ? { ...prev, imagebannierenavmenudefault: url } : null)}
                             placeholder="https://..."
-                            className="w-full h-10 px-3 rounded-md border border-background-200/70 bg-background-50 text-sm text-foreground-950 font-mono placeholder:text-foreground-400 focus:outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-300"
+                            folder="theme-images"
                           />
                         </div>
                       </div>
@@ -2121,16 +2122,13 @@ Réponds UNIQUEMENT avec l'objet JSON, pas de texte avant ou après.`;
                           />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-semibold text-foreground-600 mb-1">Image À propos</label>
-                            <input
-                              type="text"
-                              value={themeParamettre?.imageaboutus || ''}
-                              onChange={(e) => setThemeParamettre(prev => prev ? { ...prev, imageaboutus: e.target.value } : null)}
-                              placeholder="https://..."
-                              className="w-full h-10 px-3 rounded-md border border-background-200/70 bg-background-50 text-sm text-foreground-950 font-mono placeholder:text-foreground-400 focus:outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-300"
-                            />
-                          </div>
+                          <ThemeImageField
+                            label="Image À propos"
+                            value={themeParamettre?.imageaboutus || ''}
+                            onChange={(url) => setThemeParamettre(prev => prev ? { ...prev, imageaboutus: url } : null)}
+                            placeholder="https://..."
+                            folder="theme-images"
+                          />
                           <div>
                             <label className="block text-xs font-semibold text-foreground-600 mb-1">Titre bloc découverte</label>
                             <input
@@ -2151,13 +2149,12 @@ Réponds UNIQUEMENT avec l'objet JSON, pas de texte avant ou après.`;
                           />
                         </div>
                         <div>
-                          <label className="block text-xs font-semibold text-foreground-600 mb-1">Fichier bloc découverte</label>
-                          <input
-                            type="text"
+                          <ThemeImageField
+                            label="Fichier bloc découverte"
                             value={themeParamettre?.fichierblocdecouvert || ''}
-                            onChange={(e) => setThemeParamettre(prev => prev ? { ...prev, fichierblocdecouvert: e.target.value } : null)}
+                            onChange={(url) => setThemeParamettre(prev => prev ? { ...prev, fichierblocdecouvert: url } : null)}
                             placeholder="https://..."
-                            className="w-full h-10 px-3 rounded-md border border-background-200/70 bg-background-50 text-sm text-foreground-950 font-mono placeholder:text-foreground-400 focus:outline-none focus:border-primary-300 focus:ring-1 focus:ring-primary-300"
+                            folder="theme-images"
                           />
                         </div>
                       </div>

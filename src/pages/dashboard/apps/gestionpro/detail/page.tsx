@@ -44,7 +44,7 @@ const PRIORITY_COLOR: Record<number, string> = {
 
 type Tab = 'liste' | 'kanban' | 'gantt' | 'utilisateurs' | 'fichiers';
 
-export default function ProjectDetailPage() {
+export default function ProjectDetailPage({ initialTab = 'liste' }: { initialTab?: Tab } = {}) {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -56,7 +56,7 @@ export default function ProjectDetailPage() {
   const [shopUsers, setShopUsers] = useState<ShopUser[]>([]);
   const [projectUsers, setProjectUsers] = useState<ProjectUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('liste');
+  const [tab, setTab] = useState<Tab>(initialTab);
 
   // Edit project
   const [showEdit, setShowEdit] = useState(false);

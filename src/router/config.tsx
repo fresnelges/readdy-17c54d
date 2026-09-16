@@ -54,14 +54,17 @@ import GestionProPage from "../pages/dashboard/apps/gestionpro/page";
 import GestionProDetailPage from "../pages/dashboard/apps/gestionpro/detail/page";
 import ZCallPage from "../pages/dashboard/apps/zcall/page";
 import FormationAppPage from "../pages/dashboard/apps/formation/page";
+import DynamicAppPage from "../pages/dashboard/app/dynamic/page";
 import SuperAdminLayout from "../components/feature/SuperAdminLayout";
 import SuperAdminDashboard from "../pages/superadmin/page";
 import SuperAdminUsers from "../pages/superadmin/users/page";
 import SuperAdminThemes from "../pages/superadmin/themes/page";
 import ThemeGeneratePage from "../pages/superadmin/themes/generate/page";
 import SuperAdminApps from "../pages/superadmin/apps/page";
+import AppBuilderPage from "../pages/superadmin/apps/builder/page";
 import SuperAdminLogs from "../pages/superadmin/logs/page";
 import SuperAdminSettings from "../pages/superadmin/settings/page";
+import SuperAdminHomepage from "../pages/superadmin/homepage/page";
 import ProduitsPublic from "../pages/public/ProduitsPage";
 import ServicesPublic from "../pages/public/ServicesPage";
 import PartenairesPublic from "../pages/public/PartenairesPage";
@@ -195,6 +198,7 @@ const routes: RouteObject[] = [
       { path: "gestionpro/:id", element: <GestionProDetailPage /> },
       { path: "zcall", element: <ZCallPage /> },
       { path: "formation", element: <FormationAppPage /> },
+      { path: "*", element: <DynamicAppPage /> },
     ],
   },
   {
@@ -206,8 +210,10 @@ const routes: RouteObject[] = [
       { path: "themes", element: <SuperAdminThemes /> },
       { path: "themes/generate", element: <ThemeGeneratePage /> },
       { path: "apps", element: <SuperAdminApps /> },
+      { path: "apps/:id", element: <AppBuilderPage /> },
       { path: "logs", element: <SuperAdminLogs /> },
       { path: "settings", element: <SuperAdminSettings /> },
+      { path: "homepage", element: <SuperAdminHomepage /> },
     ],
   },
   {

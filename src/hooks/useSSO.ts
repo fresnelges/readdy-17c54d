@@ -43,16 +43,22 @@ export function getSSOCookie(): SSOPayload | null {
   return parseSSOCookie();
 }
 
+function isSecureContext(): boolean {
+  return typeof window !== 'undefined' && window.location.protocol === 'https:';
+}
+
 export function setSSOCookie(userId: number, email: string): void {
   const payload: SSOPayload = { i: userId, e: email, t: Date.now() };
   const value = encodeURIComponent(btoa(JSON.stringify(payload)));
   const domain = getCookieDomain();
   const domainStr = domain ? `domain=${domain}; ` : '';
-  document.cookie = `${SSO_COOKIE}=${value}; ${domainStr}path=/; max-age=2592000; SameSite=Lax`;
+  const secureStr = isSecureContext() ? '; Secure' : '';
+  document.cookie = `${SSO_COOKIE}=${value}; ${domainStr}path=/; max-age=2592000; SameSite=Lax${secureStr}`;
 }
 
 export function clearSSOCookie(): void {
   const domain = getCookieDomain();
   const domainStr = domain ? `domain=${domain}; ` : '';
-  document.cookie = `${SSO_COOKIE}=; ${domainStr}path=/; max-age=0; SameSite=Lax`;
+  const secureStr = isSecureContext() ? '; Secure' : '';
+  document.cookie = `${SSO_COOKIE}=; ${domainStr}path=/; max-age=0; SameSite=Lax${secureStr}`;
 }

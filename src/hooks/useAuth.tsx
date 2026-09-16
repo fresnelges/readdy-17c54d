@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { supabase } from '@/lib/supabase';
 import { md5 } from '@/lib/md5';
 import { setSSOCookie, clearSSOCookie } from '@/hooks/useSSO';
+import { validateUsername } from '@/lib/username';
 
 export interface ZifekUser {
   id: number;
@@ -30,7 +31,7 @@ export interface ZifekUser {
   datecreation: string;
 }
 
-interface AuthContextType {
+export interface AuthContextType {
   user: ZifekUser | null;
   loading: boolean;
   login: (identifier: string, password: string) => Promise<{ success: boolean; error?: string; user?: ZifekUser }>;
@@ -61,7 +62,7 @@ export interface ClientRegisterData {
   telephone: string;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+export const AuthContext = createContext<AuthContextType | null>(null);
 
 const STORAGE_KEY = 'zifek_user';
 
@@ -82,7 +83,7 @@ function getStoredUser(): ZifekUser | null {
   }
 }
 
-function mapZifekUser(row: Record<string, unknown>): ZifekUser {
+export function mapZifekUser(row: Record<string, unknown>): ZifekUser {
   return {
     id: row.id as number,
     user_name: row.user_name as string,
@@ -220,6 +221,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const register = useCallback(async (data: RegisterData) => {
     setLoading(true);
     try {
+      // ── Validation du nom d'utilisateur (sous-domaine) ──
+      const { valid, normalized, error: usernameError } = validateUsername(data.user_name);
+      if (!valid) {
+        return { success: false, error: usernameError || 'Nom d\u2019utilisateur invalide.' };
+      }
+
       // Check if email already exists
       const { data: existing } = await supabase
         .from('users')
@@ -230,11 +237,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'Cet email est d&eacute;j&agrave; utilis&eacute;.' };
       }
 
-      // Check if username already exists
+      // Check if username already exists (insensible à la casse)
       const { data: existingUser } = await supabase
         .from('users')
         .select('id')
-        .eq('user_name', data.user_name);
+        .ilike('user_name', normalized);
 
       if (existingUser && existingUser.length > 0) {
         return { success: false, error: 'Ce nom d&apos;utilisateur est d&eacute;j&agrave; pris.' };
@@ -275,7 +282,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: newUsers, error } = await supabase
         .from('users')
         .insert({
-          user_name: data.user_name,
+          user_name: normalized,
           email: data.email,
           password: hashedPassword,
           name: data.name,
@@ -311,14 +318,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             status: 'active',
           });
 
-        // Create subdomain entry
-        const subdomainUrl = `${data.user_name}.zifek.fr`;
-        await supabase
-          .from('websitedomain')
-          .insert({
-            user_id: newUser.id,
-            domaine: subdomainUrl,
-          });
+        // Note: le sous-domaine (username.zifek.fr) est dérivé dynamiquement
+        // depuis user_name (voir buildSubdomain / useTenant), il n'est donc
+        // PAS stocké dans websitedomain. Cette table est réservée aux
+        // domaines personnalisés liés par l'utilisateur.
       }
 
       // Auto-login: set user in context
@@ -355,6 +358,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const registerClient = useCallback(async (data: ClientRegisterData) => {
     setLoading(true);
     try {
+      // ── Validation du nom d'utilisateur (sous-domaine) ──
+      const { valid, normalized, error: usernameError } = validateUsername(data.user_name);
+      if (!valid) {
+        return { success: false, error: usernameError || 'Nom d\u2019utilisateur invalide.' };
+      }
+
       // Check if email already exists
       const { data: existing } = await supabase
         .from('users')
@@ -365,11 +374,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { success: false, error: 'Cet email est d&eacute;j&agrave; utilis&eacute;.' };
       }
 
-      // Check if username already exists
+      // Check if username already exists (insensible à la casse)
       const { data: existingUser } = await supabase
         .from('users')
         .select('id')
-        .eq('user_name', data.user_name);
+        .ilike('user_name', normalized);
 
       if (existingUser && existingUser.length > 0) {
         return { success: false, error: 'Ce nom d&apos;utilisateur est d&eacute;j&agrave; pris.' };
@@ -383,7 +392,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: newUsers, error } = await supabase
         .from('users')
         .insert({
-          user_name: data.user_name,
+          user_name: normalized,
           email: data.email,
           password: hashedPassword,
           name: data.name,

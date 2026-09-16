@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { buildSubdomain, buildSubdomainHost } from '@/lib/domain';
 
 interface DashboardStats {
   todayVisits: number;
@@ -21,6 +22,9 @@ export default function DashboardPage() {
     totalCustomers: 0,
   });
   const [statsLoading, setStatsLoading] = useState(true);
+  const [customDomain, setCustomDomain] = useState<string | null>(null);
+  const [domainVerified, setDomainVerified] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -79,6 +83,29 @@ export default function DashboardPage() {
     fetchStats();
   }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('websitedomain')
+      .select('domaine, verified')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.domaine) {
+          setCustomDomain(data.domaine.replace(/^https?:\/\//, '').replace(/\/+$/, ''));
+          setDomainVerified(!!data.verified);
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const copyShopUrl = (url: string) => {
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   if (!user) {
     return (
       <div className="min-h-screen bg-background-50 flex items-center justify-center">
@@ -89,6 +116,7 @@ export default function DashboardPage() {
       </div>
     );
   }
+
 
   const statCards = [
     {
@@ -166,6 +194,79 @@ export default function DashboardPage() {
             )}
           </Link>
         ))}
+      </div>
+
+      {/* Store URL */}
+      <div className="bg-background-50 border border-background-200/70 rounded-lg p-5 md:p-6 mb-6 md:mb-8">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-foreground-700 flex items-center gap-2">
+            <i className="ri-global-line text-primary-500"></i>
+            Lien de votre boutique
+          </h3>
+          <Link
+            to="/dashboard/settings"
+            className="text-xs text-foreground-500 hover:text-foreground-700 flex items-center gap-1 cursor-pointer whitespace-nowrap transition-colors"
+          >
+            <i className="ri-settings-3-line"></i>Configurer
+          </Link>
+        </div>
+
+        <div className="space-y-2">
+          {/* Subdomain */}
+          <div className="flex items-center justify-between gap-3 p-3 bg-background-100 rounded-lg">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xs px-2 py-0.5 rounded-full bg-accent-100 text-accent-700 font-medium whitespace-nowrap">Sous-domaine</span>
+              <a
+                href={buildSubdomain(user.user_name)}
+                target="_blank"
+                rel="nofollow noopener noreferrer"
+                className="text-sm text-foreground-900 font-medium truncate hover:text-primary-600 transition-colors"
+              >
+                {buildSubdomainHost(user.user_name)}
+              </a>
+            </div>
+            <button
+              onClick={() => copyShopUrl(buildSubdomain(user.user_name))}
+              className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-background-200/70 transition-colors cursor-pointer shrink-0"
+              title="Copier le lien"
+            >
+              <i className={`text-sm ${copied ? 'ri-check-line text-accent-500' : 'ri-file-copy-line text-foreground-400'}`}></i>
+            </button>
+          </div>
+
+          {/* Custom domain */}
+          {customDomain && (
+            <div className="flex items-center justify-between gap-3 p-3 bg-background-100 rounded-lg">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 font-medium whitespace-nowrap">Domaine perso</span>
+                <a
+                  href={`https://${customDomain}`}
+                  target="_blank"
+                  rel="nofollow noopener noreferrer"
+                  className="text-sm text-foreground-900 font-medium truncate hover:text-primary-600 transition-colors"
+                >
+                  {customDomain}
+                </a>
+                {domainVerified ? (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700 font-medium whitespace-nowrap flex items-center gap-0.5">
+                    <i className="ri-shield-check-line"></i>Vérifié
+                  </span>
+                ) : (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium whitespace-nowrap flex items-center gap-0.5">
+                    <i className="ri-time-line"></i>En attente
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => copyShopUrl(`https://${customDomain}`)}
+                className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-background-200/70 transition-colors cursor-pointer shrink-0"
+                title="Copier le lien"
+              >
+                <i className={`text-sm ${copied ? 'ri-check-line text-accent-500' : 'ri-file-copy-line text-foreground-400'}`}></i>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Quick Actions */}

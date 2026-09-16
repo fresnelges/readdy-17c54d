@@ -1,71 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useHomepageContent } from '@/hooks/useHomepageContent';
 
 export default function Pricing() {
   const navigate = useNavigate();
   const [isAnnual, setIsAnnual] = useState(false);
+  const { content } = useHomepageContent();
+  const pricing = content.pricing;
   const { ref: sectionRef, isVisible } = useScrollReveal(0.1);
-
-  const plans = [
-    {
-      name: 'Gratuit',
-      price: '0',
-      annualPrice: '0',
-      currency: 'MAD',
-      period: '/mois',
-      description: 'Pour démarrer et tester la plateforme',
-      features: [
-        'Jusqu\u2019à 10 produits',
-        'Thèmes de base',
-        'Sous-domaine ZIFEK',
-        'Paiement en ligne',
-        'Tableau de bord',
-        'Support par email',
-      ],
-      highlighted: false,
-      cta: 'Commencer gratuitement',
-    },
-    {
-      name: 'Partenaire',
-      price: '35',
-      annualPrice: '29',
-      currency: 'MAD',
-      period: '/mois',
-      description: 'Pour les petits commerces et indépendants',
-      features: [
-        'Jusqu\u2019à 100 produits',
-        'Thèmes premium',
-        'Domaine personnalisé',
-        'Toutes les passerelles de paiement',
-        'Réservation \u0026 calendrier',
-        'Blog intégré',
-        'Support prioritaire',
-      ],
-      highlighted: true,
-      cta: 'Choisir Partenaire',
-    },
-    {
-      name: 'Business',
-      price: '100',
-      annualPrice: '84',
-      currency: 'MAD',
-      period: '/mois',
-      description: 'Pour les entreprises en croissance',
-      features: [
-        'Produits illimités',
-        'Tous les thèmes + éditeur avancé',
-        'Domaine personnalisé + emails',
-        'IA avancée (logo, SEO, contenu)',
-        'Marketplace multi-vendeurs',
-        'API \u0026 webhooks',
-        'Analytics avancés',
-        'Support dédié 24/7',
-      ],
-      highlighted: false,
-      cta: 'Choisir Business',
-    },
-  ];
 
   return (
     <section
@@ -75,15 +18,19 @@ export default function Pricing() {
     >
       <div className="w-full px-4 md:px-6 lg:px-10 max-w-7xl mx-auto">
         <div className="text-center mb-14 md:mb-20">
-          <span className="inline-block px-3 py-1.5 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold mb-5">
-            Tarifs
-          </span>
+          {pricing.badge && (
+            <span className="inline-block px-3 py-1.5 rounded-full bg-primary-100 text-primary-700 text-xs font-semibold mb-5">
+              {pricing.badge}
+            </span>
+          )}
           <h2 className="text-3xl md:text-5xl font-bold font-heading text-foreground-950 mb-4">
-            Des plans adaptés à votre croissance
+            {pricing.title}
           </h2>
-          <p className="text-foreground-500 text-base md:text-lg max-w-xl mx-auto mb-8">
-            Commencez gratuitement, évoluez quand vous êtes prêt. Sans engagement, sans frais cachés.
-          </p>
+          {pricing.subtitle && (
+            <p className="text-foreground-500 text-base md:text-lg max-w-xl mx-auto mb-8">
+              {pricing.subtitle}
+            </p>
+          )}
 
           {/* Billing toggle */}
           <div className="inline-flex items-center gap-3 p-1 rounded-full bg-background-100 border border-background-200/70">
@@ -114,7 +61,7 @@ export default function Pricing() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 max-w-4xl mx-auto">
-          {plans.map((plan, index) => (
+          {pricing.items.map((plan, index) => (
             <div
               key={index}
               className={`rounded-xl p-6 md:p-7 border flex flex-col transition-all duration-500 ${

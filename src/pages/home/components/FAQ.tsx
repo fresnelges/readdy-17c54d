@@ -1,47 +1,12 @@
 import { useState } from 'react';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useHomepageContent } from '@/hooks/useHomepageContent';
 
 export default function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(0);
+  const { content } = useHomepageContent();
+  const faq = content.faq;
   const { ref: sectionRef, isVisible } = useScrollReveal(0.1);
-
-  const faqs = [
-    {
-      question: 'Est-ce que je peux vraiment créer un site sans savoir coder ?',
-      answer:
-        'Absolument ! ZIFEK est conçu pour que n\u2019importe qui, même sans connaissance technique, puisse créer un site professionnel. Notre éditeur visuel et notre IA vous guident pas à pas.',
-    },
-    {
-      question: 'Quels types de paiement puis-je accepter ?',
-      answer:
-        'ZIFEK supporte Stripe, PayPal, CMI (Maroc), PayDunya, Flutterwave et le paiement à la livraison. Activez une ou plusieurs passerelles selon vos besoins.',
-    },
-    {
-      question: 'Puis-je avoir mon propre nom de domaine ?',
-      answer:
-        'Oui ! Chaque boutique reçoit un sous-domaine gratuit (maboutique.zifek.fr) et vous pouvez également connecter votre propre domaine personnalisé.',
-    },
-    {
-      question: "Comment fonctionne l\u2019IA de ZIFEK ?",
-      answer:
-        "Décrivez simplement votre activité et l\u2019IA génère automatiquement votre site complet : pages, couleurs, logo, services, descriptions et structure SEO.",
-    },
-    {
-      question: 'Est-ce que mes données sont en sécurité ?',
-      answer:
-        'La sécurité est notre priorité. Toutes les données sont chiffrées, les paiements via des passerelles PCI-DSS, et sauvegardes automatiques quotidiennes.',
-    },
-    {
-      question: 'Y a-t-il des frais de transaction sur mes ventes ?',
-      answer:
-        'ZIFEK ne prélève aucun frais de transaction sur vos ventes. Vous ne payez que les frais standards de votre passerelle de paiement.',
-    },
-    {
-      question: 'Puis-je migrer mon site existant vers ZIFEK ?',
-      answer:
-        'Oui, nous proposons un service de migration assistée pour Shopify, WooCommerce, Wix et autres plateformes. Notre équipe vous accompagne.',
-    },
-  ];
 
   return (
     <section
@@ -51,19 +16,23 @@ export default function FAQ() {
     >
       <div className="w-full px-4 md:px-6 lg:px-10 max-w-3xl mx-auto">
         <div className="text-center mb-14 md:mb-20">
-          <span className="inline-block px-3 py-1.5 rounded-full bg-secondary-100 text-secondary-700 text-xs font-semibold mb-5">
-            FAQ
-          </span>
+          {faq.badge && (
+            <span className="inline-block px-3 py-1.5 rounded-full bg-secondary-100 text-secondary-700 text-xs font-semibold mb-5">
+              {faq.badge}
+            </span>
+          )}
           <h2 className="text-3xl md:text-5xl font-bold font-heading text-foreground-950 mb-4">
-            Questions fréquentes
+            {faq.title}
           </h2>
-          <p className="text-foreground-500 text-base md:text-lg max-w-xl mx-auto">
-            Tout ce que vous devez savoir sur ZIFEK.
-          </p>
+          {faq.subtitle && (
+            <p className="text-foreground-500 text-base md:text-lg max-w-xl mx-auto">
+              {faq.subtitle}
+            </p>
+          )}
         </div>
 
         <div className="space-y-3">
-          {faqs.map((faq, index) => {
+          {faq.items.map((item, index) => {
             const isOpen = openIndex === index;
             return (
               <div
@@ -78,7 +47,7 @@ export default function FAQ() {
                   className="w-full flex items-center justify-between p-5 md:p-6 text-left cursor-pointer"
                 >
                   <span className="text-sm md:text-base font-semibold text-foreground-950 pr-6">
-                    {faq.question}
+                    {item.question}
                   </span>
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
@@ -98,7 +67,7 @@ export default function FAQ() {
                   }`}
                 >
                   <div className="px-5 md:px-6 pb-5 md:pb-6">
-                    <p className="text-foreground-500 text-sm leading-relaxed">{faq.answer}</p>
+                    <p className="text-foreground-500 text-sm leading-relaxed">{item.answer}</p>
                   </div>
                 </div>
               </div>

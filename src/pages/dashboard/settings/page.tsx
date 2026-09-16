@@ -3,11 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { md5 } from '@/lib/md5';
 import { parseCharte, generatePalette, type ChartPalette } from '@/lib/palette';
-
-function buildSubdomain(userName: string): string {
-  const slug = userName.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9-]/g, '');
-  return `https://${slug}.zifek.fr`;
-}
+import { buildSubdomain } from '@/lib/domain';
 
 function cleanDisplayUrl(url: string): string {
   return url.replace(/^https?:\/\//, '');
@@ -99,9 +95,12 @@ export default function SettingsPage() {
   const [dnsChecking, setDnsChecking] = useState(false);
   const [dnsStatus, setDnsStatus] = useState<'idle' | 'checking' | 'ok' | 'no_dns' | 'not_reachable' | 'error'>('idle');
   const [dnsRecords, setDnsRecords] = useState<string[]>([]);
+  const [domainVerified, setDomainVerified] = useState(false);
 
   const subdomain = user ? buildSubdomain(user.user_name) : '';
   const currentDomain = hasCustomDomain ? domainInput : subdomain;
+  const domainApex = domainInput.trim().toLowerCase().replace(/^www\./, '');
+  const domainPrefersWww = domainInput.trim().toLowerCase().startsWith('www.');
 
   // Fetch pays and monnaie lists
   useEffect(() => {
@@ -178,14 +177,50 @@ export default function SettingsPage() {
       .finally(() => setLoadingVilles(false));
   }, [profile.paysId]);
 
+  const persistVerification = async (verified: boolean) => {
+    if (!existingDomainId) return;
+    try {
+      await supabase
+        .from('websitedomain')
+        .update({ verified })
+        .eq('id', existingDomainId);
+      setDomainVerified(verified);
+    } catch {
+      // silent
+    }
+  };
+
   const checkDns = async () => {
     if (!hasCustomDomain || !domainInput.trim()) return;
-    const rawDomain = domainInput.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+    const rawDomain = domainInput.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '').toLowerCase();
+    const cnameTarget = cleanDisplayUrl(subdomain); // ex: lucer.zifek.fr
     setDnsChecking(true);
     setDnsStatus('checking');
     setDnsRecords([]);
 
     try {
+      // 1) Vérifie d'abord l'enregistrement CNAME (méthode recommandée)
+      const cnameRes = await fetch(
+        `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(rawDomain)}&type=CNAME`,
+        { headers: { Accept: 'application/dns-json' } }
+      );
+      const cnameData = await cnameRes.json();
+      const cnameAnswers = (cnameData.Answer || []).filter(
+        (r: { type: number }) => r.type === 5
+      );
+
+      if (cnameAnswers.length > 0) {
+        const targets = cnameAnswers.map((r: { data: string }) =>
+          r.data.toLowerCase().replace(/\.$/, '')
+        );
+        setDnsRecords(targets);
+        const matches = targets.some((t) => t === cnameTarget);
+        setDnsStatus(matches ? 'ok' : 'not_reachable');
+        await persistVerification(matches);
+        return;
+      }
+
+      // 2) Sinon, vérifie l'enregistrement A
       const dnsRes = await fetch(
         `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(rawDomain)}&type=A`,
         { headers: { Accept: 'application/dns-json' } }
@@ -194,7 +229,7 @@ export default function SettingsPage() {
 
       if (!dnsData.Answer || dnsData.Answer.length === 0) {
         setDnsStatus('no_dns');
-        setDnsChecking(false);
+        await persistVerification(false);
         return;
       }
 
@@ -202,15 +237,11 @@ export default function SettingsPage() {
         .filter((r: { type: number }) => r.type === 1)
         .map((r: { data: string }) => r.data);
       setDnsRecords(ips);
-
-      try {
-        const reachRes = await fetch(`https://${rawDomain}`, { method: 'HEAD', mode: 'no-cors' });
-        setDnsStatus('ok');
-      } catch {
-        setDnsStatus('not_reachable');
-      }
+      setDnsStatus('ok');
+      await persistVerification(true);
     } catch {
       setDnsStatus('error');
+      await persistVerification(false);
     } finally {
       setDnsChecking(false);
     }
@@ -229,6 +260,7 @@ export default function SettingsPage() {
           setDomainInput(d.startsWith('http') ? d.replace(/^https?:\/\//, '') : d);
           setHasCustomDomain(true);
           setExistingDomainId(data.id);
+          setDomainVerified(!!data.verified);
         }
       })
       .catch(() => {})
@@ -380,7 +412,11 @@ export default function SettingsPage() {
     setDomainError('');
     setDomainSaved(false);
 
-    const trimmed = domainInput.trim();
+    const trimmed = domainInput
+      .trim()
+      .replace(/^https?:\/\//, '')
+      .replace(/\/+$/, '')
+      .toLowerCase();
 
     if (!trimmed && hasCustomDomain) {
       setSaving(true);
@@ -409,21 +445,34 @@ export default function SettingsPage() {
       return;
     }
 
+    // Empêche de lier un domaine déjà utilisé par une autre boutique
+    const strippedDomain = trimmed.replace(/^www\./, '');
+    const { data: existingDomains } = await supabase
+      .from('websitedomain')
+      .select('id, domaine')
+      .or(`domaine.eq.${trimmed},domaine.eq.www.${strippedDomain},domaine.eq.${strippedDomain}`);
+
+    if (existingDomains && existingDomains.some((d) => d.id !== existingDomainId)) {
+      setDomainError('Ce domaine est déjà utilisé par une autre boutique');
+      return;
+    }
+
     setSaving(true);
     try {
       if (hasCustomDomain && existingDomainId) {
         const { error } = await supabase
           .from('websitedomain')
-          .update({ domaine: trimmed })
+          .update({ domaine: trimmed, verified: false })
           .eq('id', existingDomainId);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('websitedomain')
-          .insert({ user_id: user.id, domaine: trimmed });
+          .insert({ user_id: user.id, domaine: trimmed, verified: false });
         if (error) throw error;
         setHasCustomDomain(true);
       }
+      setDomainVerified(false);
       setDomainSaved(true);
       setTimeout(() => setDomainSaved(false), 3000);
     } catch {
@@ -448,6 +497,7 @@ export default function SettingsPage() {
       setHasCustomDomain(false);
       setExistingDomainId(null);
       setDomainInput('');
+      setDomainVerified(false);
       setDomainSaved(true);
       setTimeout(() => setDomainSaved(false), 3000);
     } catch {
@@ -756,7 +806,15 @@ export default function SettingsPage() {
                       {hasCustomDomain ? 'Domaine personnalisé' : 'Ajouter un domaine personnalisé'}
                     </span>
                     {hasCustomDomain && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 font-medium">Actif</span>
+                      domainVerified ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium flex items-center gap-1">
+                          <i className="ri-shield-check-line"></i>Vérifié
+                        </span>
+                      ) : (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 font-medium flex items-center gap-1">
+                          <i className="ri-time-line"></i>En attente
+                        </span>
+                      )
                     )}
                   </div>
 
@@ -800,6 +858,55 @@ export default function SettingsPage() {
                     >
                       <i className="ri-delete-bin-line text-xs"></i>Supprimer le domaine personnalisé
                     </button>
+                  )}
+
+                  {/* Instructions de liaison DNS */}
+                  {hasCustomDomain && domainInput.trim() && (
+                    <div className="mt-4 p-3 rounded-lg bg-accent-50 border border-accent-100">
+                      <div className="flex items-center gap-2 mb-2">
+                        <i className="ri-guide-line text-accent-600 text-sm"></i>
+                        <span className="text-xs font-semibold text-accent-700">Comment lier votre domaine</span>
+                      </div>
+                      <p className="text-xs text-foreground-600 mb-3">
+                        Chez votre registrar (OVH, GoDaddy, Namecheap…), créez l&apos;enregistrement suivant pour relier votre domaine à votre boutique :
+                      </p>
+
+                      <div className="flex items-center gap-3 bg-background-50 rounded-md px-3 py-2.5 border border-background-200/70">
+                        <div className="flex-1">
+                          <div className="text-[10px] text-foreground-400 uppercase tracking-wide mb-0.5">Type</div>
+                          <div className="text-xs font-mono font-semibold text-foreground-900">{domainPrefersWww ? 'CNAME' : 'ALIAS / ANAME'}</div>
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-[10px] text-foreground-400 uppercase tracking-wide mb-0.5">Nom / Hôte</div>
+                          <div className="text-xs font-mono text-foreground-900">{domainPrefersWww ? 'www' : '@ (racine)'}</div>
+                        </div>
+                        <div className="flex-1">
+                          <div className="text-[10px] text-foreground-400 uppercase tracking-wide mb-0.5">Valeur / Cible</div>
+                          <div className="text-xs font-mono text-foreground-900">{cleanDisplayUrl(subdomain)}</div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(cleanDisplayUrl(subdomain)).then(() => {
+                              setDomainCopied(true);
+                              setTimeout(() => setDomainCopied(false), 2000);
+                            });
+                          }}
+                          className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-background-200/70 transition-colors cursor-pointer shrink-0"
+                          title="Copier la cible"
+                        >
+                          <i className={`text-sm ${domainCopied ? 'ri-check-line text-accent-500' : 'ri-file-copy-line text-foreground-400'}`}></i>
+                        </button>
+                      </div>
+
+                      <p className="text-[11px] text-foreground-500 mt-3 leading-relaxed">
+                        <i className="ri-information-line mr-1"></i>
+                        {domainPrefersWww ? (
+                          <>La version racine (ex. {domainApex} sans « www ») sera <span className="font-semibold">automatiquement redirigée</span> vers www.{domainApex}. Chez votre registrar, ajoutez une redirection 301 de la racine vers www.{domainApex}, ou utilisez un enregistrement ALIAS/ANAME si votre registrar le permet.</>
+                        ) : (
+                          <>La version « www » (ex. www.{domainApex}) sera <span className="font-semibold">automatiquement redirigée</span> vers {domainApex}. Chez votre registrar, ajoutez une redirection 301 de www.{domainApex} vers {domainApex}.</>
+                        )}
+                      </p>
+                    </div>
                   )}
 
                   {/* DNS Verification */}
@@ -865,7 +972,7 @@ export default function SettingsPage() {
                                 <span className="text-xs font-semibold text-amber-700">Aucun enregistrement DNS trouvé</span>
                               </div>
                               <p className="text-xs text-amber-600">
-                                Le domaine n&apos;a pas d&apos;enregistrement A. Ajoutez un enregistrement A pointant vers l&apos;IP de votre boutique Zifek dans la configuration DNS de votre registrar.
+                                Aucun enregistrement DNS trouvé pour ce domaine. Ajoutez l&apos;enregistrement CNAME indiqué ci-dessus dans la configuration DNS de votre registrar, puis patientez quelques minutes (propagation DNS).
                               </p>
                             </div>
                           )}
@@ -875,10 +982,10 @@ export default function SettingsPage() {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <i className="ri-error-warning-line text-amber-600 text-sm"></i>
-                                <span className="text-xs font-semibold text-amber-700">DNS configuré mais site inaccessible</span>
+                                <span className="text-xs font-semibold text-amber-700">DNS configuré mais cible incorrecte</span>
                               </div>
                               <p className="text-xs text-amber-600">
-                                Le DNS pointe vers {dnsRecords.length > 0 ? dnsRecords.join(', ') : 'une IP'} mais le site ne répond pas. Vérifiez que l&apos;IP cible correspond bien aux serveurs Zifek et que le SSL est actif.
+                                L&apos;enregistrement pointe vers {dnsRecords.length > 0 ? dnsRecords.join(', ') : 'une autre destination'} au lieu de votre sous-domaine Zifek ({cleanDisplayUrl(subdomain)}). Vérifiez la cible dans la configuration DNS.
                               </p>
                               {dnsRecords.length > 0 && (
                                 <div className="mt-2 flex flex-wrap gap-1">

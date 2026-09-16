@@ -210,3 +210,24 @@ Sans aucune connaissance technique. ZIFEK combine les fonctionnalités de Shopif
 ### Phase 8 : CMS & Blog
 ### Phase 9 : IA Intégrée
 ### Phase 10 : App Store & Marketplace
+
+### Phase 10.5 : App Builder (Builder no-code d'apps) ✅
+- **Objectif** : Permettre au superadmin de construire le contenu d'une app (pages, blocs, formulaires, données, réglages) sans code, et de le rendre dynamiquement côté commerçant.
+- **Livrables** :
+  - [x] Bouton « Configurer l'app » sur chaque carte du catalogue (`/superadmin/apps`)
+  - [x] Page builder `/superadmin/apps/:id` avec 4 onglets : Pages, Formulaires, Données, Réglages
+  - [x] Pages composées de blocs (titre, texte, image, liste, formulaire, tableau, espace)
+  - [x] Formulaires avec champs (drag/ajout, réordonnancement, options, obligatoire)
+  - [x] Tables de données avec champs + saisie de lignes (CRUD)
+  - [x] Réglages typés (texte, nombre, interrupteur, choix)
+  - [x] Rendu dynamique côté commerçant via route catch-all `/dashboard/{nompage}`
+- **Tables créées** : `app_pages`, `app_blocks`, `app_forms`, `app_form_fields`, `app_form_responses`, `app_tables`, `app_table_fields`, `app_table_rows`, `app_settings`
+- **Architecture** :
+  - `src/pages/superadmin/apps/builder/page.tsx` : page builder (onglets)
+  - `src/pages/superadmin/apps/builder/constants.ts` : types + constantes (blocs, champs, réglages)
+  - `src/pages/superadmin/apps/builder/components/PagesPanel.tsx` : gestion des pages
+  - `src/pages/superadmin/apps/builder/components/BlockEditor.tsx` : éditeur de blocs
+  - `src/pages/superadmin/apps/builder/components/FormsPanel.tsx` : gestion des formulaires
+  - `src/pages/superadmin/apps/builder/components/DataPanel.tsx` : gestion des données
+  - `src/pages/superadmin/apps/builder/components/SettingsPanel.tsx` : gestion des réglages
+  - `src/pages/dashboard/app/dynamic/page.tsx` : rendu dynamique de l'app côté commerçant

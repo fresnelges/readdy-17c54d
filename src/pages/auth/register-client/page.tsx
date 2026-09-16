@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth, isSuperAdmin, type ClientRegisterData } from '@/hooks/useAuth';
+import { validateUsername } from '@/lib/username';
+import { useUsernameAvailability } from '@/hooks/useUsernameAvailability';
 import Navbar from '@/pages/home/components/Navbar';
 import Footer from '@/pages/home/components/Footer';
 
@@ -36,12 +38,19 @@ export default function RegisterClientPage() {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const usernameValidation = validateUsername(formData.user_name);
+  const { status: usernameStatus, message: usernameStatusMessage } = useUsernameAvailability(formData.user_name);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
     if (!formData.name || !formData.email || !formData.user_name) {
       setError('Veuillez remplir tous les champs obligatoires.');
+      return;
+    }
+    if (!usernameValidation.valid) {
+      setError(usernameValidation.error || 'Nom d\u2019utilisateur invalide.');
       return;
     }
     if (formData.password.length < 6) {
@@ -198,11 +207,31 @@ export default function RegisterClientPage() {
                     type="text"
                     name="user_name"
                     value={formData.user_name}
-                    onChange={(e) => updateField('user_name', e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, ''))}
+                    onChange={(e) => updateField('user_name', e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
                     placeholder="nomutilisateur"
                     required
                     className={inputClass}
                   />
+                  {formData.user_name && !usernameValidation.valid && (
+                    <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                      <i className="ri-error-warning-line"></i>{usernameValidation.error}
+                    </p>
+                  )}
+                  {formData.user_name && usernameValidation.valid && usernameStatus === 'checking' && (
+                    <p className="text-xs text-foreground-400 mt-1.5 flex items-center gap-1">
+                      <i className="ri-loader-4-line animate-spin"></i>V&eacute;rification de la disponibilit&eacute;...
+                    </p>
+                  )}
+                  {formData.user_name && usernameValidation.valid && usernameStatus === 'taken' && (
+                    <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                      <i className="ri-close-circle-line"></i>{usernameStatusMessage || 'Ce nom est d\u00e9j\u00e0 pris.'}
+                    </p>
+                  )}
+                  {formData.user_name && usernameValidation.valid && usernameStatus === 'available' && (
+                    <p className="text-xs text-emerald-600 mt-1.5 flex items-center gap-1">
+                      <i className="ri-checkbox-circle-line"></i>Ce nom est disponible
+                    </p>
+                  )}
                 </div>
 
                 <div>

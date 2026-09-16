@@ -1,4 +1,5 @@
 import { useTenant } from '@/hooks/useTenant';
+import { getMainSiteUrl } from '@/lib/domain';
 
 export default function TenantFooter() {
   const { tenant, theme } = useTenant();
@@ -31,7 +32,7 @@ export default function TenantFooter() {
         </div>
         <div className="mt-4 pt-4 border-t border-background-200/70 text-center text-xs text-foreground-400">
           &copy; {year} {storeName}. Propulsé par{' '}
-          <a href="https://zifek.fr" target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 font-medium no-underline">
+          <a href={getMainSiteUrl()} target="_blank" rel="noopener noreferrer" className="text-primary-600 hover:text-primary-700 font-medium no-underline">
             Zifek
           </a>
         </div>

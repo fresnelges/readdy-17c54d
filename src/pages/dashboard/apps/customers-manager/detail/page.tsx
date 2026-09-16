@@ -122,13 +122,13 @@ const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'notes', label: 'Notes', icon: 'ri-sticky-note-line' },
 ];
 
-export default function CustomerDetailPage() {
+export default function CustomerDetailPage({ initialTab = 'orders' }: { initialTab?: TabKey } = {}) {
   const params = useParams<{ customerId?: string; clientId?: string }>();
   const customerId = params.customerId || params.clientId || '';
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<TabKey>('orders');
+  const [activeTab, setActiveTab] = useState<TabKey>(initialTab);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [contactOpen, setContactOpen] = useState(false);

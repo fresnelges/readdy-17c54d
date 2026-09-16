@@ -8,6 +8,7 @@ const NAV_ITEMS = [
   { icon: 'ri-user-line', label: 'Utilisateurs', path: '/superadmin/users' },
   { icon: 'ri-palette-line', label: 'Theme Builder', path: '/superadmin/themes' },
   { icon: 'ri-apps-2-line', label: 'App Builder', path: '/superadmin/apps' },
+  { icon: 'ri-home-8-line', label: "Page d'accueil", path: '/superadmin/homepage' },
   { icon: 'ri-terminal-line', label: 'Logs Système', path: '/superadmin/logs' },
   { icon: 'ri-shield-keyhole-line', label: 'Paramètres IA', path: '/superadmin/settings' },
 ];

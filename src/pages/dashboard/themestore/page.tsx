@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { buildSubdomain, buildSubdomainHost } from '@/lib/domain';
 import { uploadMediaFile } from '@/hooks/useUpload';
 import ImagePicker from '@/components/feature/ImagePicker';
 import {
@@ -985,10 +986,10 @@ function ThemeCustomizerModal({ themeId, commerceId, storeName, userName, initia
                     <div className="w-2.5 h-2.5 rounded-full bg-green-400"></div>
                   </div>
                   <span className="text-[10px] text-foreground-400 ml-2 truncate">
-                    {userName ? `${userName}.zifek.fr` : 'Votre site public'}
+                    {userName ? buildSubdomainHost(userName) : 'Votre site public'}
                   </span>
                   <a
-                    href={userName ? `https://${userName}.zifek.fr` : '#'}
+                    href={userName ? buildSubdomain(userName) : '#'}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="ml-auto text-[10px] text-primary-500 hover:text-primary-600 flex items-center gap-1 cursor-pointer whitespace-nowrap no-underline"
@@ -1000,7 +1001,7 @@ function ThemeCustomizerModal({ themeId, commerceId, storeName, userName, initia
                 <div className="bg-background-50" style={{ height: '420px' }}>
                   {userName ? (
                     <iframe
-                      src={`https://${userName}.zifek.fr`}
+                      src={buildSubdomain(userName)}
                       title="Aperçu du site"
                       className="w-full h-full border-0"
                       sandbox="allow-same-origin allow-scripts"
