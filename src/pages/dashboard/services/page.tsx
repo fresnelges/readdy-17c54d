@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getCommerceId } from '@/lib/ownership';
 import { uploadMediaFile } from '@/hooks/useUpload';
 
 interface ServiceItem {
@@ -237,7 +238,7 @@ export default function ServicesPage() {
       let query = supabase
         .from('nospartenairesservices')
         .select('*')
-        .eq('owner', user!.id)
+        .eq('idcommerce', getCommerceId(user))
         .order('created_at', { ascending: false });
 
       if (search) {

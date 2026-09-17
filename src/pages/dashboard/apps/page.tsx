@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -28,6 +28,15 @@ export default function AppsManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [togglingIds, setTogglingIds] = useState<Set<number>>(new Set());
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('active');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setToast({ message, type });
+    toastTimerRef.current = setTimeout(() => setToast(null), 3000);
+  };
 
   const commerceId = user?.id || 0;
 
@@ -69,6 +78,12 @@ export default function AppsManagementPage() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
   const handleToggle = async (app: InstalledApp) => {
     setTogglingIds((prev) => {
       const next = new Set(prev);
@@ -87,6 +102,9 @@ export default function AppsManagementPage() {
       setInstalledApps((prev) =>
         prev.map((a) => (a.id === app.id ? { ...a, status: newStatus } : a))
       );
+      window.dispatchEvent(new CustomEvent('app-status-changed'));
+      const appName = appDetails.get(app.idapp)?.nom || app.nomapp || 'App';
+      showToast(`${appName} ${newStatus === 1 ? 'activée' : 'désactivée'}`, 'success');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur');
     } finally {
@@ -122,6 +140,10 @@ export default function AppsManagementPage() {
           appsToToggle.some((t) => t.id === a.id) ? { ...a, status: targetStatus } : a
         )
       );
+      window.dispatchEvent(new CustomEvent('app-status-changed'));
+      const verb = action === 'activate' ? 'activée' : 'désactivée';
+      const plural = appsToToggle.length > 1 ? 's' : '';
+      showToast(`${appsToToggle.length} app${plural} ${verb}${plural}`, 'success');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur');
     } finally {
@@ -142,6 +164,8 @@ export default function AppsManagementPage() {
   };
 
   const filteredApps = installedApps.filter((app) => {
+    if (statusFilter === 'active' && app.status !== 1) return false;
+    if (statusFilter === 'inactive' && app.status !== 0) return false;
     const detail = appDetails.get(app.idapp);
     if (!searchTerm) return true;
     const search = searchTerm.toLowerCase();
@@ -168,19 +192,36 @@ export default function AppsManagementPage() {
             Activez ou désactivez vos applications installées
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-accent-50 rounded-full text-xs text-accent-700 font-medium">
-            <i className="ri-checkbox-circle-line"></i>
-            <span className="whitespace-nowrap">{activeCount} active{activeCount > 1 ? 's' : ''}</span>
-          </div>
-          {inactiveCount > 0 && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-background-100 rounded-full text-xs text-foreground-500 font-medium">
-              <i className="ri-indeterminate-circle-line"></i>
-              <span className="whitespace-nowrap">{inactiveCount} inactif{inactiveCount > 1 ? 's' : ''}</span>
-            </div>
-          )}
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-background-100 rounded-full text-xs text-foreground-500 font-medium">
+          <i className="ri-apps-2-line"></i>
+          <span className="whitespace-nowrap">{installedApps.length} app{installedApps.length > 1 ? 's' : ''} installée{installedApps.length > 1 ? 's' : ''}</span>
         </div>
       </div>
+
+      {/* Status filter tabs */}
+      {installedApps.length > 0 && (
+        <div className="flex items-center gap-0.5 bg-background-100 rounded-full p-1 w-fit mb-4">
+          {[
+            { key: 'active', label: 'Actives', icon: 'ri-checkbox-circle-line', count: activeCount },
+            { key: 'inactive', label: 'Inactives', icon: 'ri-indeterminate-circle-line', count: inactiveCount },
+            { key: 'all', label: 'Toutes', icon: 'ri-apps-2-line', count: installedApps.length },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setStatusFilter(tab.key as 'all' | 'active' | 'inactive')}
+              className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap cursor-pointer transition-colors ${
+                statusFilter === tab.key
+                  ? 'bg-background-50 text-foreground-900 shadow-sm'
+                  : 'text-foreground-500 hover:text-foreground-700'
+              }`}
+            >
+              <i className={tab.icon}></i>
+              {tab.label}
+              <span className="text-xs opacity-70">{tab.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Bulk actions */}
       {installedApps.length > 0 && (
@@ -246,7 +287,26 @@ export default function AppsManagementPage() {
         </div>
       ) : filteredApps.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 bg-background-50 border border-background-200/70 rounded-lg">
-          <p className="text-foreground-500">Aucune app ne correspond à votre recherche</p>
+          <div className="w-16 h-16 rounded-full bg-background-100 flex items-center justify-center mb-4">
+            <i className="ri-toggle-line text-2xl text-foreground-400"></i>
+          </div>
+          <p className="text-sm text-foreground-600">
+            {searchTerm
+              ? 'Aucune app ne correspond à votre recherche'
+              : statusFilter === 'active'
+                ? 'Aucune app active'
+                : statusFilter === 'inactive'
+                  ? 'Aucune app inactive'
+                  : 'Aucune app'}
+          </p>
+          {!searchTerm && statusFilter === 'active' && inactiveCount > 0 && (
+            <button
+              onClick={() => setStatusFilter('inactive')}
+              className="mt-3 px-4 py-2 bg-background-100 text-foreground-600 rounded-full text-sm font-medium cursor-pointer hover:bg-background-200/70 transition-colors"
+            >
+              Voir {inactiveCount} app{inactiveCount > 1 ? 's' : ''} inactive{inactiveCount > 1 ? 's' : ''}
+            </button>
+          )}
         </div>
       ) : (
         <div className="bg-background-50 border border-background-200/70 rounded-lg overflow-hidden">
@@ -348,6 +408,20 @@ export default function AppsManagementPage() {
           <span className="text-accent-600">{activeCount} active{activeCount > 1 ? 's' : ''}</span>
           <span>·</span>
           <span>{inactiveCount} inactive{inactiveCount > 1 ? 's' : ''}</span>
+        </div>
+      )}
+
+      {/* Toast confirmation */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-toast-in">
+          <div className={`flex items-center gap-2.5 px-4 py-2.5 rounded-full ${
+            toast.type === 'success'
+              ? 'bg-foreground-950 text-background-50'
+              : 'bg-red-500 text-white'
+          }`}>
+            <i className={`text-lg ${toast.type === 'success' ? 'ri-checkbox-circle-line text-accent-300' : 'ri-error-warning-line'}`}></i>
+            <span className="text-sm font-medium whitespace-nowrap">{toast.message}</span>
+          </div>
         </div>
       )}
     </div>

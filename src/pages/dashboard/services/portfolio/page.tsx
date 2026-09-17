@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getCommerceId } from '@/lib/ownership';
 import { uploadMediaFile } from '@/hooks/useUpload';
 
 interface PortfolioItem {
@@ -18,6 +19,7 @@ interface PortfolioItem {
   ville: string | null;
   slug: string;
   created_at: string;
+  taille: number;
 }
 
 export default function PortfolioPage() {
@@ -54,7 +56,7 @@ export default function PortfolioPage() {
       let query = supabase
         .from('portfolio')
         .select('*')
-        .eq('owner', user!.id)
+        .eq('idcommerce', getCommerceId(user))
         .order('created_at', { ascending: false });
 
       if (search) {
@@ -109,10 +111,14 @@ export default function PortfolioPage() {
     setEditingDetailSaving(true);
     try {
       let finalImage = editImage;
+      let finalTaille = detailItem.taille || 0;
       if (newMediaFile) {
         setUploadingNew(true);
         const url = await uploadMediaFile(newMediaFile, 'portfolio').catch(() => null);
-        if (url) finalImage = url;
+        if (url) {
+          finalImage = url;
+          finalTaille = newMediaFile.size;
+        }
         setUploadingNew(false);
       }
 
@@ -127,6 +133,7 @@ export default function PortfolioPage() {
           ville: editVille.trim() || null,
           pays: editPays.trim() || null,
           product_image: finalImage || '',
+          taille: finalTaille,
         })
         .eq('id', detailItem.id);
 

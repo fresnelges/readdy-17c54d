@@ -20,7 +20,7 @@ export default function StatsTag() {
 
     const ownerFilter = (query: ReturnType<typeof supabase.from>) => {
       if (isTenant && tenant) {
-        return query.eq('owner', tenant.id);
+        return query.eq('idcommerce', tenant.id);
       }
       return query;
     };
@@ -32,7 +32,7 @@ export default function StatsTag() {
 
     Promise.all([
       ownerFilter(supabase.from('product_items').select('id', { count: 'exact', head: true }).eq('status', 'active')),
-      ownerFilter(supabase.from('services').select('id', { count: 'exact', head: true })),
+      ownerFilter(supabase.from('nospartenairesservices').select('id', { count: 'exact', head: true })),
       ownerFilter(supabase.from('partenaires').select('id', { count: 'exact', head: true })),
       ownerFilter(supabase.from('equipe').select('id', { count: 'exact', head: true })),
       ownerFilter(supabase.from('temoignage').select('id', { count: 'exact', head: true })),

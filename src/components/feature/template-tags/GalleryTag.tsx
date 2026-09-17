@@ -23,7 +23,7 @@ export default function GalleryTag({ limit }: { limit?: number }) {
     let query = supabase.from('portfolio').select('id, titre, description, product_image, tags, created_at');
 
     if (isTenant && tenant) {
-      query = query.eq('owner', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
 
     query

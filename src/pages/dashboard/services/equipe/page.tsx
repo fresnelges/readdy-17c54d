@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getCommerceId } from '@/lib/ownership';
 import { uploadMediaFile } from '@/hooks/useUpload';
 
 interface TeamMember {
@@ -56,7 +57,7 @@ export default function EquipePage() {
       const { data, error: fetchError } = await supabase
         .from('equipe')
         .select('*')
-        .eq('owner', user!.id)
+        .eq('idcommerce', getCommerceId(user))
         .order('created_at', { ascending: false });
       if (fetchError) throw fetchError;
       setMembers(data || []);
@@ -101,6 +102,7 @@ export default function EquipePage() {
         prix: 0,
         product_image: formData.product_image || '',
         owner: user.id,
+        idcommerce: getCommerceId(user),
         pays: user.Pays || null,
         ville: user.Ville || null,
         slug: formData.titre.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),

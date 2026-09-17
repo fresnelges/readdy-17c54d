@@ -40,7 +40,7 @@ async function signRequest(
   s3Path: string,
   query: string,
   headers: Record<string, string>,
-  payload: Uint8Array,
+  payloadHash: string,
   dateAmz: string,
   dateStamp: string,
 ): Promise<string> {
@@ -53,8 +53,6 @@ async function signRequest(
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()))
     .map((k) => `${k.toLowerCase()}:${headers[k].trim()}`)
     .join("\n") + "\n";
-
-  const payloadHash = await sha256(payload);
 
   const canonicalRequest = [
     method,
@@ -91,15 +89,19 @@ async function signedFetch(
   const dateStamp = dateAmz.slice(0, 8);
   const host = new URL(SEAWEEDFS_ENDPOINT).host;
 
+  // Le hash du contenu n'est calculé qu'une seule fois, puis réutilisé
+  // pour l'en-tête x-amz-content-sha256 ET pour la signature de la requête.
+  const payloadHash = await sha256(body);
+
   const headers: Record<string, string> = {
     "Host": host,
-    "x-amz-content-sha256": await sha256(body),
+    "x-amz-content-sha256": payloadHash,
     "x-amz-date": dateAmz,
     ...extraHeaders,
   };
 
   const authorization = await signRequest(
-    method, s3Path, queryString, headers, body, dateAmz, dateStamp,
+    method, s3Path, queryString, headers, payloadHash, dateAmz, dateStamp,
   );
   headers["Authorization"] = authorization;
 
@@ -131,14 +133,35 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+// Dossier personnel d'un utilisateur dans le bucket SeaweedFS.
+// Tous les fichiers Médias d'un compte vivent sous users/{userId}/...
+// ce qui permet de lister par compte et de les rattacher au quota global.
+export function getUserMediaFolder(userId: number): string {
+  return `users/${userId}`;
+}
+
+// Nettoie le nom original pour produire une clé S3 sûre tout en restant lisible
+function sanitizeFileName(fileName: string): string {
+  const dotIdx = fileName.lastIndexOf('.');
+  const base = dotIdx > 0 ? fileName.slice(0, dotIdx) : fileName;
+  const ext = dotIdx > 0 ? fileName.slice(dotIdx + 1).toLowerCase() : 'bin';
+  const clean =
+    base
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9-_]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60) || 'fichier';
+  return `${clean}-${crypto.randomUUID().slice(0, 6)}.${ext}`;
+}
+
 export async function uploadToSeaweedFS(
   fileData: Uint8Array,
   fileName: string,
   contentType: string,
   folder: string,
 ): Promise<string> {
-  const ext = fileName.split(".").pop()?.toLowerCase() || "bin";
-  const safeName = `${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${ext}`;
+  const safeName = sanitizeFileName(fileName);
   const objectPath = `${folder}/${safeName}`;
   const s3Path = `/${SEAWEEDFS_BUCKET}/${objectPath}`;
 
@@ -152,6 +175,35 @@ export async function uploadToSeaweedFS(
     throw new Error(`SeaweedFS a retourne ${resp.status}: ${errorBody.slice(0, 200)}`);
   }
 
+  return `${SEAWEEDFS_ENDPOINT.replace(/\/$/, "")}/${SEAWEEDFS_BUCKET}/${objectPath}`;
+}
+
+// Récupère le contenu brut d'un objet (pour conversion / déplacement)
+export async function getFileBytes(key: string): Promise<ArrayBuffer> {
+  const resp = await signedFetch("GET", `/${SEAWEEDFS_BUCKET}/${key}`, "");
+  if (!resp.ok) {
+    throw new Error(`Erreur de lecture: ${resp.status}`);
+  }
+  return await resp.arrayBuffer();
+}
+
+// Déplace un fichier vers un autre dossier (conserve le même nom de fichier)
+export async function moveFile(oldKey: string, newFolder: string): Promise<string> {
+  const bytes = await getFileBytes(oldKey);
+  const filename = oldKey.split("/").pop() || "fichier";
+  const objectPath = `${newFolder}/${filename}`;
+  const s3Path = `/${SEAWEEDFS_BUCKET}/${objectPath}`;
+
+  const resp = await signedFetch("PUT", s3Path, "", {
+    "Content-Type": "application/octet-stream",
+    "x-amz-acl": "public-read",
+  }, bytes);
+
+  if (!resp.ok) {
+    throw new Error(`Erreur de déplacement: ${resp.status}`);
+  }
+
+  await deleteFile(oldKey);
   return `${SEAWEEDFS_ENDPOINT.replace(/\/$/, "")}/${SEAWEEDFS_BUCKET}/${objectPath}`;
 }
 

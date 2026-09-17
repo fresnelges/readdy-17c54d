@@ -24,7 +24,7 @@ export default function PartnersTag() {
     let query = supabase.from('partenaires').select('*');
 
     if (isTenant && tenant) {
-      query = query.eq('owner', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
 
     query

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
+import { trackEvent } from '@/lib/facebookPixel';
 
 interface FormFieldDef {
   id: number;
@@ -234,6 +235,11 @@ export default function PublicFormPage() {
       }
 
       setSubmitted(true);
+
+      // Suivi Facebook Pixel : formulaire soumis (Lead).
+      trackEvent('Lead', {
+        content_name: form.title || 'Formulaire',
+      });
     } catch {
       setErrors({ _form: 'Erreur lors de l\'envoi du formulaire. Veuillez réessayer.' });
     }

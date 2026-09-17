@@ -22,7 +22,7 @@ export default function TeamTag() {
     let query = supabase.from('equipe').select('*');
 
     if (isTenant && tenant) {
-      query = query.eq('owner', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
 
     query

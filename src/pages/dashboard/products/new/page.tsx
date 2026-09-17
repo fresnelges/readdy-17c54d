@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getCommerceId } from '@/lib/ownership';
 import { uploadMediaFile, formatFileSize, MEDIA_LIMITS } from '@/hooks/useUpload';
 
 interface ProductCategory {
@@ -269,6 +270,7 @@ export default function NewProductPage() {
         pricing_mode: hasVariants ? (pricingMode === 'per_variant' ? 1 : 0) : 0,
         media: JSON.stringify(media),
         owner: user?.id,
+        idcommerce: getCommerceId(user),
         ville: user?.Ville || null,
         pays: user?.Pays || null,
       };

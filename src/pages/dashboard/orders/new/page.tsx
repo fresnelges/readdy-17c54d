@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getCommerceId } from '@/lib/ownership';
 
 interface ProductItem {
   id: number;
@@ -22,6 +23,7 @@ interface CartLine {
   finalPrice: number;
   quantity: number;
   subtotal: number;
+  stock: number;
 }
 
 interface CustomerInfo {
@@ -78,25 +80,38 @@ export default function NewOrderPage() {
     })();
   }, [customerId, user]);
 
-  // Fetch products on search
+  // Fetch products (scoped to the connected merchant) — supports empty query to list all
   const searchProducts = useCallback(async (q: string) => {
-    if (!q || q.length < 1) { setProducts([]); return; }
+    if (!user) { setProducts([]); return; }
     setProductsLoading(true);
-    const { data } = await supabase
-      .from('product_items')
-      .select('*, product_categories(id, name)')
-      .eq('status', 'active')
-      .ilike('name', `%${q}%`)
-      .order('name')
-      .limit(30);
-    setProducts(data as ProductItem[] || []);
-    setProductsLoading(false);
-  }, []);
+    try {
+      let query = supabase
+        .from('product_items')
+        .select('*, product_categories(id, name)')
+        .eq('status', 'active')
+        .eq('idcommerce', getCommerceId(user))
+        .order('name')
+        .limit(50);
+
+      if (q && q.trim()) {
+        query = query.ilike('name', `%${q.trim()}%`);
+      }
+
+      const { data } = await query;
+      setProducts(data as ProductItem[] || []);
+    } catch {
+      setProducts([]);
+    } finally {
+      setProductsLoading(false);
+    }
+  }, [user]);
 
   const addToCart = (p: ProductItem) => {
+    if (p.stock != null && p.stock <= 0) return;
     setCart(prev => {
       const existing = prev.find(l => l.productId === p.id);
       if (existing) {
+        if (existing.stock != null && existing.quantity + 1 > existing.stock) return prev;
         return prev.map(l => l.productId === p.id
           ? { ...l, quantity: l.quantity + 1, subtotal: (l.quantity + 1) * l.finalPrice }
           : l
@@ -110,6 +125,7 @@ export default function NewOrderPage() {
         finalPrice,
         quantity: 1,
         subtotal: finalPrice,
+        stock: p.stock ?? null as unknown as number,
       }];
     });
     setShowProductPicker(false);
@@ -119,7 +135,11 @@ export default function NewOrderPage() {
 
   const updateQty = (idx: number, qty: number) => {
     if (qty < 1) return;
-    setCart(prev => prev.map((l, i) => i === idx ? { ...l, quantity: qty, subtotal: qty * l.finalPrice } : l));
+    setCart(prev => prev.map((l, i) => {
+      if (i !== idx) return l;
+      if (l.stock != null && qty > l.stock) return l;
+      return { ...l, quantity: qty, subtotal: qty * l.finalPrice };
+    }));
   };
 
   const removeLine = (idx: number) => {
@@ -250,7 +270,7 @@ export default function NewOrderPage() {
                 Produits ({cart.length})
               </h3>
               <button
-                onClick={() => { setShowProductPicker(true); setSearch(''); setProducts([]); }}
+                onClick={() => { setShowProductPicker(true); setSearch(''); searchProducts(''); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 text-background-50 rounded-full text-xs font-medium hover:bg-primary-600 transition-colors cursor-pointer"
               >
                 <i className="ri-add-line"></i>
@@ -286,17 +306,20 @@ export default function NewOrderPage() {
                       <div className="flex justify-center py-8"><i className="ri-loader-4-line animate-spin text-primary-500"></i></div>
                     ) : products.length === 0 ? (
                       <p className="text-center py-8 text-sm text-foreground-500">
-                        {search ? 'Aucun produit trouvé' : 'Tapez pour rechercher un produit'}
+                        {search ? 'Aucun produit trouvé' : 'Aucun produit disponible'}
                       </p>
                     ) : (
                       <div className="space-y-1">
                         {products.map(p => {
                           const fp = p.discount_enabled && p.discount_price ? p.discount_price : p.price;
+                          const outOfStock = p.stock != null && p.stock <= 0;
+                          const lowStock = p.stock != null && p.stock > 0 && p.stock <= 5;
                           return (
                             <button
                               key={p.id}
                               onClick={() => addToCart(p)}
-                              className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-background-100 transition-colors text-left cursor-pointer"
+                              disabled={outOfStock}
+                              className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-background-100 transition-colors text-left cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                               <div className="w-10 h-10 rounded bg-background-100 flex items-center justify-center flex-shrink-0 overflow-hidden">
                                 {p.media && p.media.length > 0 ? (
@@ -314,7 +337,26 @@ export default function NewOrderPage() {
                                   )}
                                 </div>
                               </div>
-                              <i className="ri-add-circle-line text-primary-500"></i>
+                              {p.stock != null ? (
+                                outOfStock ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-100 text-red-700 whitespace-nowrap">
+                                    <i className="ri-close-circle-line"></i>Rupture
+                                  </span>
+                                ) : lowStock ? (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-100 text-amber-700 whitespace-nowrap">
+                                    <i className="ri-alert-line"></i>Stock {p.stock}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-700 whitespace-nowrap">
+                                    <i className="ri-checkbox-circle-line"></i>{p.stock}
+                                  </span>
+                                )
+                              ) : (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-background-200/70 text-foreground-500 whitespace-nowrap">
+                                  Stock illimité
+                                </span>
+                              )}
+                              {!outOfStock && <i className="ri-add-circle-line text-primary-500"></i>}
                             </button>
                           );
                         })}
@@ -335,6 +377,11 @@ export default function NewOrderPage() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground-900 truncate">{line.productName}</p>
                       <p className="text-xs text-foreground-500">{line.finalPrice.toLocaleString()} {currency} / unité</p>
+                      {line.stock != null && (
+                        <p className={`text-[11px] mt-0.5 ${line.quantity >= line.stock ? 'text-amber-600 font-medium' : 'text-foreground-400'}`}>
+                          Stock disponible : {line.stock}
+                        </p>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <button

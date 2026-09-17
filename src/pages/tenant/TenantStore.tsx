@@ -5,15 +5,19 @@ import TenantNavbar from './TenantNavbar';
 import TenantFooter from './TenantFooter';
 import TenantHome from './TenantHome';
 import ProduitsPublic from '@/pages/public/ProduitsPage';
+import RecherchePublic from '@/pages/public/RecherchePage';
 import ServicesPublic from '@/pages/public/ServicesPage';
 import PartenairesPublic from '@/pages/public/PartenairesPage';
 import PortfolioPublic from '@/pages/public/PortfolioPage';
 import EquipePublic from '@/pages/public/EquipePage';
+import PanierPublic from '@/pages/public/PanierPage';
+import CommandePublic from '@/pages/public/CommandePage';
 import BookingPage from '@/pages/public/BookingPage';
 import PublicFormPage from '@/pages/public/FormPage';
 import ZCallRoomPage from '@/pages/public/ZCallRoomPage';
 import NotFound from '@/pages/NotFound';
 import TenantThemePage from './TenantThemePage';
+import FacebookPixel from '@/components/feature/FacebookPixel';
 
 export default function TenantStore() {
   const { tenant, theme, loading } = useTenant();
@@ -64,12 +68,18 @@ export default function TenantStore() {
         {/* SEO meta for tenant store */}
         <TenantMeta storeName={storeName} description={tenant.description || storeName} />
 
+        {/* Facebook Pixel — suivi des visiteurs (si configuré par le marchand) */}
+        <FacebookPixel />
+
         <TenantNavbar />
 
         <main className="flex-1">
           <Routes>
             <Route path="/" element={<TenantHome />} />
+            <Route path="/search" element={<RecherchePublic />} />
             <Route path="/products" element={<ProduitsPublic />} />
+            <Route path="/cart" element={<PanierPublic />} />
+            <Route path="/checkout" element={<CommandePublic />} />
             <Route path="/services" element={<ServicesPublic />} />
             <Route path="/partners" element={<PartenairesPublic />} />
             <Route path="/portfolio" element={<PortfolioPublic />} />
@@ -78,6 +88,7 @@ export default function TenantStore() {
             <Route path="/booking/:serviceId" element={<BookingPage />} />
             <Route path="/forms/:id" element={<PublicFormPage />} />
             <Route path="/call/:roomId" element={<ZCallRoomPage />} />
+            <Route path="/zcall/:slug" element={<ZCallRoomPage />} />
             <Route path="/page/:pageKey" element={<TenantThemePage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>

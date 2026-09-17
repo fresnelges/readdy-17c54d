@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getCommerceId } from '@/lib/ownership';
 import { uploadMediaFile, formatFileSize, MEDIA_LIMITS } from '@/hooks/useUpload';
 
 interface ServiceCategory {
@@ -241,6 +242,7 @@ export default function NewServicePage() {
         ville: user.Ville || null,
         typeservice: form.typeservice || null,
         owner: user.id,
+        idcommerce: getCommerceId(user),
         slug,
       };
 

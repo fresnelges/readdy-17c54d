@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/hooks/useTenant';
+import { useSectionContent } from '@/hooks/useSectionContent';
 
 interface PortfolioItem {
   id: number;
@@ -20,6 +21,7 @@ export default function PortfolioPublic() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { tenant, isTenant } = useTenant();
+  const { before, highlight, subtitle } = useSectionContent('portfolio');
 
   useEffect(() => {
     setLoading(true);
@@ -28,7 +30,7 @@ export default function PortfolioPublic() {
       .select('*');
     
     if (isTenant && tenant) {
-      query = query.eq('owner', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
     
     query.order('created_at', { ascending: false })
@@ -47,10 +49,12 @@ export default function PortfolioPublic() {
         <div className="absolute inset-0 bg-gradient-to-b from-background-100/50 to-transparent"></div>
         <div className="relative w-full px-4 md:px-6 max-w-7xl mx-auto text-center">
           <h1 className="text-3xl md:text-5xl font-bold font-heading text-foreground-950 mb-4">
-            Notre <span className="text-primary-500">Portfolio</span>
+            {before}
+            {before && highlight ? ' ' : ''}
+            {highlight && <span className="text-primary-500">{highlight}</span>}
           </h1>
           <p className="text-sm md:text-base text-foreground-500 max-w-xl mx-auto">
-            Découvrez nos projets réalisés et notre savoir-faire
+            {subtitle}
           </p>
         </div>
       </section>
@@ -92,7 +96,7 @@ export default function PortfolioPublic() {
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <h3 className="text-base font-semibold text-foreground-900">{item.titre}</h3>
                       {item.prix > 0 && (
-                        <span className="text-sm font-bold text-primary-600 whitespace-nowrap flex-shrink-0">{item.prix.toLocaleString()} MAD</span>
+                        <span className="text-sm font-bold text-primary-600 whitespace-nowrap flex-shrink-0">{item.prix.toLocaleString()} {tenant?.monaie || 'MAD'}</span>
                       )}
                     </div>
                     <p className="text-sm text-foreground-500 mb-3 line-clamp-2">{item.description}</p>

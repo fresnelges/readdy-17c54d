@@ -5,6 +5,9 @@ import { supabase } from '@/lib/supabase';
 // ─── Configuration Jitsi Self-Hosté ─────────────────────────────────────
 const JITSI_DOMAIN = 'jitsi-meet-0o2q.srv1134875.hstgr.cloud';
 
+// ─── Logo de marque ZIFEK ───────────────────────────────────────────────
+const BRAND_LOGO = 'https://storage.helloreaddy.io/project_files/59392c9e-e303-496e-bac1-59ba5941cf65/07452721-5131-4b23-922e-acc73d68a0a9_compressed_zifek.webp';
+
 interface MeetingInfo {
   id: number;
   title: string;
@@ -12,17 +15,23 @@ interface MeetingInfo {
   scheduled_at: string | null;
   duration_minutes: number;
   status: string;
+  created_at: string;
 }
 
+/** Durée maximale d'une réunion avant fermeture automatique (5 heures). */
+const AUTO_CLOSE_MS = 5 * 60 * 60 * 1000;
+
 export default function ZCallRoomPage() {
-  const { roomId } = useParams<{ roomId: string }>();
+  const { slug, roomId } = useParams<{ slug?: string; roomId?: string }>();
   const navigate = useNavigate();
+  const identifier = slug || roomId;
 
   const [meeting, setMeeting] = useState<MeetingInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
+  const [displayName, setDisplayName] = useState('');
 
   // Jitsi IFrame API
   const jitsiContainerRef = useRef<HTMLDivElement>(null);
@@ -30,7 +39,7 @@ export default function ZCallRoomPage() {
   const [jitsiApiReady, setJitsiApiReady] = useState(false);
 
   useEffect(() => {
-    if (!roomId) {
+    if (!identifier) {
       setError('Aucun identifiant de réunion fourni.');
       setLoading(false);
       return;
@@ -39,8 +48,8 @@ export default function ZCallRoomPage() {
     const fetchMeeting = async () => {
       const { data, error: fetchErr } = await supabase
         .from('zcall_meetings')
-        .select('id, title, room_id, scheduled_at, duration_minutes, status')
-        .eq('room_id', roomId)
+        .select('id, title, room_id, slug, scheduled_at, duration_minutes, status, created_at')
+        .or(`slug.eq.${identifier},room_id.eq.${identifier}`)
         .maybeSingle();
 
       if (fetchErr || !data) {
@@ -49,6 +58,16 @@ export default function ZCallRoomPage() {
         setError('Cette réunion a été annulée.');
       } else if (data.status === 'ended') {
         setError('Cette réunion est terminée.');
+      } else if (
+        data.status === 'active' &&
+        Date.now() - new Date(data.created_at).getTime() > AUTO_CLOSE_MS
+      ) {
+        // Fermeture automatique après 5 heures
+        await supabase
+          .from('zcall_meetings')
+          .update({ status: 'ended' })
+          .eq('id', data.id);
+        setError('Cette réunion est terminée.');
       } else {
         setMeeting(data as MeetingInfo);
       }
@@ -56,7 +75,7 @@ export default function ZCallRoomPage() {
     };
 
     fetchMeeting();
-  }, [roomId]);
+  }, [identifier]);
 
   // ─── Charger external_api.js depuis le Jitsi self-hosté ───────────────
   useEffect(() => {
@@ -75,7 +94,7 @@ export default function ZCallRoomPage() {
     document.body.appendChild(script);
   }, [joined, meeting]);
 
-  // ─── Initialiser JitsiMeetExternalAPI avec branding Zifek ────────────
+  // ─── Initialiser JitsiMeetExternalAPI avec branding ZCall ────────────
   useEffect(() => {
     if (!jitsiApiReady || !meeting || !jitsiContainerRef.current) return;
 
@@ -87,22 +106,105 @@ export default function ZCallRoomPage() {
       width: '100%',
       height: '100%',
       parentNode: jitsiContainerRef.current,
+      userInfo: {
+        displayName: displayName.trim() || 'Participant',
+      },
       configOverwrite: {
-        startWithAudioMuted: false,
+        // ── Grandes réunions (jusqu'à 100 participants) ──
+        disableP2P: true,
+        p2p: { enabled: false },
+        channelLastN: 100,
+        disableTileView: false,
+        tileView: {
+          enabled: true,
+          thumbnailSize: { width: 240, height: 135 },
+        },
+        // ── Qualité vidéo plafonnée pour tenir la charge ──
+        resolution: 720,
+        constraints: {
+          video: {
+            height: { ideal: 720, max: 720, min: 180 },
+            width: { ideal: 1280, max: 1280, min: 320 },
+          },
+        },
+        videoQuality: {
+          maxBitrates: {
+            low: 200000,
+            standard: 500000,
+            high: 1500000,
+          },
+          minHeightForQualityLvl: {
+            360: 'standard',
+            720: 'high',
+          },
+        },
+        // ── Arrivée et notifications ──
+        startWithAudioMuted: true,
         startWithVideoMuted: false,
+        enableNoisyMicDetection: true,
+        enableTalkWhileMuted: false,
         disableDeepLinking: true,
         prejoinPageEnabled: false,
         disableInviteFunctions: false,
+        enableClosePage: false,
+        doNotStoreRoom: true,
+        // ── Enregistrement ──
+        enableRecording: true,
+        // ── Diffusion en direct ──
+        enableLiveStreaming: true,
+        // ── Tableau blanc / document partagé ──
+        whiteboard: { enabled: true },
+        openSharedDocumentOnJoin: false,
+        // ── Sous-groupes (breakout rooms) ──
+        breakoutRooms: { hideAddRoomButton: false },
+        // ── Modération ──
+        disableRemoteMute: false,
       },
       interfaceConfigOverwrite: {
-        APP_NAME: 'Zifek',
-        NATIVE_APP_NAME: 'Zifek',
+        APP_NAME: 'ZCall',
+        NATIVE_APP_NAME: 'ZCall',
         SHOW_JITSI_WATERMARK: false,
         SHOW_POWERED_BY: false,
         JITSI_WATERMARK_LINK: '',
         SHOW_BRAND_WATERMARK: false,
         BRAND_WATERMARK_LINK: '',
         SHOW_PROMOTIONAL_CLOSE_PAGE: false,
+        TOOLBAR_ALWAYS_VISIBLE: true,
+        DEFAULT_BACKGROUND: '#111827',
+        SHOW_CHROME_EXTENSION_BANNER: false,
+        HIDE_INVITE_MORE_HEADER: false,
+        DISPLAY_WELCOME_PAGE_CONTENT: false,
+        FILM_STRIP_MAX_HEIGHT: 120,
+        VIDEO_LAYOUT_FIT: 'both',
+        RECENT_LIST_ENABLED: false,
+        MOBILE_APP_PROMO: false,
+        SETTINGS_SECTIONS: ['devices', 'language', 'moderator', 'profile'],
+        // ── Barre d'outils professionnelle complète ──
+        TOOLBAR_BUTTONS: [
+          'microphone',
+          'camera',
+          'desktop',
+          'select-background',
+          'closedcaptions',
+          'chat',
+          'raisehand',
+          'participants-pane',
+          'tileview',
+          'recording',
+          'livestreaming',
+          'etherpad',
+          'sharedvideo',
+          'videoquality',
+          'mute-everyone',
+          'mute-video-everyone',
+          'invite',
+          'security',
+          'shortcuts',
+          'stats',
+          'settings',
+          'fullscreen',
+          'hangup',
+        ],
       },
     });
 
@@ -118,16 +220,15 @@ export default function ZCallRoomPage() {
     };
   }, [jitsiApiReady, meeting, navigate]);
 
-  // ─── Favicon Zifek pour la page de réunion ────────────────────────────
+  // ─── Favicon ZCall pour la page de réunion ────────────────────────────
   useEffect(() => {
     const existingFavicon = document.querySelector('link[rel="icon"]') as HTMLLinkElement | null;
     const prevHref = existingFavicon?.getAttribute('href') ?? '';
 
-    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#111827"/><text x="32" y="46" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="42" font-weight="800" fill="#10b981">Z</text></svg>`;
     const favicon = document.createElement('link');
     favicon.rel = 'icon';
-    favicon.type = 'image/svg+xml';
-    favicon.href = `data:image/svg+xml,${encodeURIComponent(svgContent)}`;
+    favicon.type = 'image/webp';
+    favicon.href = BRAND_LOGO;
     document.head.appendChild(favicon);
 
     if (existingFavicon) {
@@ -232,9 +333,10 @@ export default function ZCallRoomPage() {
       <div className="min-h-screen flex items-center justify-center bg-background-50 p-4">
         <div className="max-w-md w-full">
           <div className="bg-background-50 border border-background-200/70 rounded-2xl p-8 text-center">
-            <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-background-100 flex items-center justify-center">
-              <i className="ri-vidicon-line text-3xl text-foreground-400"></i>
+            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl overflow-hidden border border-background-200/70 bg-background-100">
+              <img src={BRAND_LOGO} alt="ZIFEK" title="ZIFEK" className="w-full h-full object-cover" />
             </div>
+            <p className="text-sm font-heading font-bold text-[#13599b] mb-0.5">ZCall</p>
             <p className="text-xs font-medium text-foreground-500 uppercase tracking-widest mb-3">Visioconférence</p>
             <h1 className="text-lg font-semibold text-foreground-900 mb-1">{meeting.title}</h1>
             {meeting.scheduled_at && (
@@ -273,6 +375,20 @@ export default function ZCallRoomPage() {
               </div>
             </div>
 
+            <div className="space-y-3 mb-6">
+              <div className="text-left">
+                <label className="block text-xs font-medium text-foreground-600 mb-1.5">Votre nom</label>
+                <input
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Ex: Marie Dupont"
+                  maxLength={40}
+                  className="w-full px-4 py-2.5 text-sm border border-background-200/70 rounded-xl bg-background-50 text-foreground-800 focus:outline-none focus:border-primary-300 transition-colors"
+                />
+              </div>
+            </div>
+
             <div className="flex items-center gap-3">
               <button
                 onClick={handleJoin}
@@ -302,8 +418,8 @@ export default function ZCallRoomPage() {
         {!jitsiApiReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-foreground-950 z-20">
             <div className="text-center">
-              <div className="w-20 h-20 mx-auto mb-5 rounded-2xl bg-white/10 flex items-center justify-center">
-                <i className="ri-vidicon-line text-3xl text-white/40"></i>
+              <div className="w-20 h-20 mx-auto mb-5 rounded-2xl overflow-hidden bg-white/5">
+                <img src={BRAND_LOGO} alt="ZIFEK" title="ZIFEK" className="w-full h-full object-cover" />
               </div>
 
               <div className="w-48 mx-auto mb-4 h-1 bg-white/5 rounded-full overflow-hidden">
@@ -327,7 +443,10 @@ export default function ZCallRoomPage() {
               <i className="ri-arrow-left-line"></i>
             </button>
             <div className="flex items-center gap-2">
-              <span className="text-white text-sm font-semibold font-heading">Visioconférence</span>
+              <span className="w-6 h-6 rounded-md overflow-hidden flex items-center justify-center shrink-0">
+                <img src={BRAND_LOGO} alt="ZIFEK" title="ZIFEK" className="w-full h-full object-cover" />
+              </span>
+              <span className="text-white text-sm font-semibold font-heading">ZCall</span>
               <span className="w-1 h-1 rounded-full bg-white/30"></span>
               <span className="text-white/80 text-xs font-medium truncate max-w-[180px]">{meeting.title}</span>
             </div>

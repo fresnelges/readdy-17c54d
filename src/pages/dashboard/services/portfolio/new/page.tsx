@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getCommerceId } from '@/lib/ownership';
 import { uploadMediaFile } from '@/hooks/useUpload';
 
 export default function NewPortfolioPage() {
@@ -21,6 +22,7 @@ export default function NewPortfolioPage() {
   });
 
   const [imageUploading, setImageUploading] = useState(false);
+  const [imageTaille, setImageTaille] = useState(0);
   const imageInputRef = useRef<HTMLInputElement>(null);
 
   const handleChange = (field: string, value: string) => {
@@ -35,6 +37,7 @@ export default function NewPortfolioPage() {
       const url = await uploadMediaFile(file, 'portfolio');
       if (url) {
         setFormData((prev) => ({ ...prev, product_image: url }));
+        setImageTaille(file.size);
       }
     } catch {
       // silent
@@ -56,7 +59,9 @@ export default function NewPortfolioPage() {
         tags: formData.tags.trim() || null,
         prix: parseFloat(formData.prix) || 0,
         product_image: formData.product_image || '',
+        taille: imageTaille,
         owner: user.id,
+        idcommerce: getCommerceId(user),
         pays: user.Pays || null,
         ville: user.Ville || null,
         slug: formData.titre.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
@@ -99,7 +104,7 @@ export default function NewPortfolioPage() {
                 <img src={formData.product_image} alt="Aperçu" className="w-full h-full object-cover" />
                 <button
                   type="button"
-                  onClick={() => setFormData((prev) => ({ ...prev, product_image: '' }))}
+                  onClick={() => { setFormData((prev) => ({ ...prev, product_image: '' })); setImageTaille(0); }}
                   className="absolute top-2 right-2 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center cursor-pointer hover:bg-red-600 transition-colors"
                 >
                   <i className="ri-close-line text-sm"></i>

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { buildSubdomain } from '@/lib/domain';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface ZCallMeeting {
@@ -8,6 +9,7 @@ interface ZCallMeeting {
   user_id: number;
   title: string;
   room_id: string;
+  slug: string | null;
   scheduled_at: string | null;
   duration_minutes: number;
   status: 'scheduled' | 'active' | 'ended' | 'cancelled';
@@ -25,6 +27,9 @@ const DURATION_OPTIONS = [
   { value: 240, label: '4h' },
 ];
 
+/** Durée maximale d'une réunion avant fermeture automatique (5 heures). */
+const AUTO_CLOSE_MS = 5 * 60 * 60 * 1000;
+
 function generateRoomId(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
   const segments = [
@@ -33,6 +38,19 @@ function generateRoomId(): string {
     Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join(''),
   ];
   return `zc-${segments.join('-')}`;
+}
+
+/** Génère un slug lisible et unique à partir du titre de la réunion. */
+function generateSlug(title: string): string {
+  const base = title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${base || 'reunion'}-${suffix}`;
 }
 
 function formatDateTime(iso: string | null): string {
@@ -47,9 +65,33 @@ function formatDateTime(iso: string | null): string {
   });
 }
 
-function getMeetingUrl(roomId: string): string {
+/** Construit l'URL d'invitation publique sur le domaine de la boutique. */
+function getMeetingUrl(
+  inviteDomain: string,
+  meeting: { slug: string | null; room_id: string },
+): string {
   const basePath = (typeof __BASE_PATH__ !== 'undefined' ? __BASE_PATH__ : '').replace(/\/$/, '');
-  return `${window.location.origin}${basePath}/call/${roomId}`;
+  const segment = meeting.slug || meeting.room_id;
+  const path = meeting.slug ? 'zcall' : 'call';
+  return `${inviteDomain}${basePath}/${path}/${segment}`;
+}
+
+/** Résout le domaine public de la boutique : domaine personnalisé vérifié sinon sous-domaine. */
+async function resolveInviteDomain(userId: number, userName: string): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('websitedomain')
+      .select('domaine')
+      .eq('user_id', userId)
+      .eq('verified', true)
+      .limit(1);
+    if (data && data.length > 0 && data[0]?.domaine) {
+      return `https://${String(data[0].domaine).replace(/\/+$/, '')}`;
+    }
+  } catch {
+    // on retombe sur le sous-domaine en cas d'erreur
+  }
+  return buildSubdomain(userName);
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -75,11 +117,15 @@ export default function ZCallPage() {
   const [meetings, setMeetings] = useState<ZCallMeeting[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Domaine public de la boutique (sous-domaine ou domaine personnalisé)
+  const [inviteDomain, setInviteDomain] = useState<string>('');
+
   // Instant form
   const [instantTitle, setInstantTitle] = useState('');
   const [instantDuration, setInstantDuration] = useState(60);
-  const [instantLink, setInstantLink] = useState<string | null>(null);
   const [instantRoomId, setInstantRoomId] = useState<string | null>(null);
+  const [instantSlug, setInstantSlug] = useState<string | null>(null);
+  const [instantMeetingId, setInstantMeetingId] = useState<number | null>(null);
 
   // Schedule form
   const [schedTitle, setSchedTitle] = useState('');
@@ -90,6 +136,8 @@ export default function ZCallPage() {
   // Copy feedback
   const [copiedId, setCopiedId] = useState<number | null>(null);
   const [copiedInstant, setCopiedInstant] = useState(false);
+
+  const domain = inviteDomain || window.location.origin;
 
   // ──────────────────────────────────────────────────────────────────────────
   const fetchMeetings = useCallback(async () => {
@@ -109,31 +157,40 @@ export default function ZCallPage() {
     if (userId) fetchMeetings();
   }, [userId, fetchMeetings]);
 
+  // Résout le domaine public de la boutique au chargement
+  useEffect(() => {
+    if (!user) return;
+    resolveInviteDomain(user.id, user.user_name).then((d) => setInviteDomain(d));
+  }, [user]);
+
   // ─── Instant Meeting ────────────────────────────────────────────────────
   const createInstantMeeting = async () => {
     if (!instantTitle.trim()) return;
     const roomId = generateRoomId();
-    const { error } = await supabase.from('zcall_meetings').insert({
+    const slug = generateSlug(instantTitle);
+    const { data, error } = await supabase.from('zcall_meetings').insert({
       user_id: userId,
       title: instantTitle.trim(),
       room_id: roomId,
+      slug,
       scheduled_at: null,
       duration_minutes: instantDuration,
       status: 'active',
-    });
-    if (error) {
+    }).select('id').single();
+    if (error || !data) {
       console.error('Erreur création réunion:', error);
-      alert('Erreur lors de la création : ' + error.message);
+      alert('Erreur lors de la création : ' + (error?.message || 'inconnue'));
       return;
     }
+    setInstantMeetingId(data.id);
     setInstantRoomId(roomId);
-    setInstantLink(getMeetingUrl(roomId));
+    setInstantSlug(slug);
     fetchMeetings();
   };
 
   const joinInstant = () => {
-    if (instantRoomId) {
-      window.open(getMeetingUrl(instantRoomId), '_blank');
+    if (instantSlug) {
+      window.open(getMeetingUrl(domain, { slug: instantSlug, room_id: instantRoomId || '' }), '_blank');
     }
   };
 
@@ -141,11 +198,13 @@ export default function ZCallPage() {
   const scheduleMeeting = async () => {
     if (!schedTitle.trim() || !schedDate || !schedTime) return;
     const roomId = generateRoomId();
+    const slug = generateSlug(schedTitle);
     const scheduledAt = `${schedDate}T${schedTime}:00`;
     const { error } = await supabase.from('zcall_meetings').insert({
       user_id: userId,
       title: schedTitle.trim(),
       room_id: roomId,
+      slug,
       scheduled_at: scheduledAt,
       duration_minutes: schedDuration,
       status: 'scheduled',
@@ -163,15 +222,17 @@ export default function ZCallPage() {
   };
 
   // ─── Actions ────────────────────────────────────────────────────────────
-  const copyLink = (roomId: string, meetingId: number) => {
-    navigator.clipboard.writeText(getMeetingUrl(roomId));
-    setCopiedId(meetingId);
+  const copyLink = (meeting: ZCallMeeting) => {
+    navigator.clipboard.writeText(getMeetingUrl(domain, meeting));
+    setCopiedId(meeting.id);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
   const copyInstantLink = () => {
-    if (instantLink) {
-      navigator.clipboard.writeText(instantLink);
+    if (instantSlug) {
+      navigator.clipboard.writeText(
+        getMeetingUrl(domain, { slug: instantSlug, room_id: instantRoomId || '' }),
+      );
       setCopiedInstant(true);
       setTimeout(() => setCopiedInstant(false), 2000);
     }
@@ -200,9 +261,60 @@ export default function ZCallPage() {
     fetchMeetings();
   };
 
+  /** Ferme une réunion en cours (statut → ended). */
+  const endMeeting = async (meetingId: number) => {
+    const { error } = await supabase
+      .from('zcall_meetings')
+      .update({ status: 'ended' })
+      .eq('id', meetingId);
+    if (error) {
+      console.error('Erreur fermeture:', error);
+      alert('Erreur : ' + error.message);
+      return;
+    }
+    // Si c'était la réunion instantanée affichée, on réinitialise l'écran
+    if (meetingId === instantMeetingId) {
+      setInstantMeetingId(null);
+      setInstantRoomId(null);
+      setInstantSlug(null);
+      setInstantTitle('');
+    }
+    fetchMeetings();
+  };
+
+  // ─── Fermeture automatique après 5 heures ───────────────────────────────
+  useEffect(() => {
+    if (!userId) return;
+    const autoCloseExpired = async () => {
+      const { data } = await supabase
+        .from('zcall_meetings')
+        .select('id, status, created_at')
+        .eq('user_id', userId)
+        .eq('status', 'active');
+      if (!data) return;
+      const now = Date.now();
+      const expiredIds = (data as { id: number; created_at: string }[])
+        .filter((m) => now - new Date(m.created_at).getTime() > AUTO_CLOSE_MS)
+        .map((m) => m.id);
+      if (expiredIds.length > 0) {
+        await supabase
+          .from('zcall_meetings')
+          .update({ status: 'ended' })
+          .in('id', expiredIds);
+        fetchMeetings();
+      }
+    };
+    autoCloseExpired();
+  }, [userId, fetchMeetings]);
+
   // ──────────────────────────────────────────────────────────────────────────
   const upcomingMeetings = meetings.filter((m) => m.status === 'scheduled');
   const pastMeetings = meetings.filter((m) => m.status !== 'scheduled');
+
+  const instantLink =
+    instantSlug != null
+      ? getMeetingUrl(domain, { slug: instantSlug, room_id: instantRoomId || '' })
+      : null;
 
   return (
     <div className="p-4 md:p-6 max-w-4xl mx-auto">
@@ -211,8 +323,9 @@ export default function ZCallPage() {
         <div className="flex items-center gap-3 mb-2">
           <div className="w-10 h-10 rounded-xl overflow-hidden flex items-center justify-center">
             <img
-              src="https://storage.readdy-site.link/project_files/59392c9e-e303-496e-bac1-59ba5941cf65/ff89f43a-e5cd-4976-84f3-61ee677410a4_compressed_logozifek.webp"
-              alt="Zifek"
+              src="https://storage.helloreaddy.io/project_files/59392c9e-e303-496e-bac1-59ba5941cf65/07452721-5131-4b23-922e-acc73d68a0a9_compressed_zifek.webp"
+              alt="ZIFEK"
+              title="ZIFEK"
               className="w-full h-full object-cover"
             />
           </div>
@@ -248,7 +361,7 @@ export default function ZCallPage() {
       {/* ─── Tab: Instant ──────────────────────────────────────────────── */}
       {activeTab === 'instant' && (
         <div className="space-y-6">
-          {!instantLink ? (
+          {!instantSlug ? (
             <div className="bg-background-50 border border-background-200/70 rounded-xl p-6">
               <div className="flex items-center gap-3 mb-5">
                 <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center">
@@ -311,7 +424,7 @@ export default function ZCallPage() {
               </div>
 
               <div className="p-4 bg-background-100 rounded-xl">
-                <p className="text-xs font-medium text-foreground-500 mb-2">Lien de la réunion :</p>
+                <p className="text-xs font-medium text-foreground-500 mb-2">Lien d'invitation :</p>
                 <div className="flex items-center gap-2">
                   <input
                     readOnly
@@ -329,18 +442,28 @@ export default function ZCallPage() {
                     )}
                   </button>
                 </div>
+                <p className="text-[11px] text-foreground-400 mt-2">
+                  Partagez ce lien à vos participants pour qu'ils rejoignent la visioconférence.
+                </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <button
                   onClick={joinInstant}
                   className="flex-1 py-3 bg-emerald-500 text-white rounded-full text-sm font-semibold cursor-pointer hover:bg-emerald-600 transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
                 >
-                  <i className="ri-external-link-line"></i>
-                  Rejoindre la réunion
+                  <i className="ri-vidicon-line"></i>
+                  Lancer la visioconférence
                 </button>
                 <button
-                  onClick={() => { setInstantLink(null); setInstantRoomId(null); setInstantTitle(''); }}
+                  onClick={() => instantMeetingId && endMeeting(instantMeetingId)}
+                  className="px-6 py-3 bg-red-50 text-red-600 rounded-full text-sm font-semibold cursor-pointer hover:bg-red-100 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+                >
+                  <i className="ri-stop-circle-line"></i>
+                  Terminer
+                </button>
+                <button
+                  onClick={() => { setInstantRoomId(null); setInstantSlug(null); setInstantTitle(''); setInstantMeetingId(null); }}
                   className="px-6 py-3 bg-background-100 text-foreground-600 rounded-full text-sm font-medium cursor-pointer hover:bg-background-200/70 transition-colors whitespace-nowrap"
                 >
                   Nouvelle réunion
@@ -479,9 +602,11 @@ export default function ZCallPage() {
                       <MeetingCard
                         key={m.id}
                         meeting={m}
+                        inviteDomain={domain}
                         copyLink={copyLink}
                         cancelMeeting={cancelMeeting}
                         deleteMeeting={deleteMeeting}
+                        endMeeting={endMeeting}
                         copiedId={copiedId}
                       />
                     ))}
@@ -501,9 +626,11 @@ export default function ZCallPage() {
                       <MeetingCard
                         key={m.id}
                         meeting={m}
+                        inviteDomain={domain}
                         copyLink={copyLink}
                         cancelMeeting={cancelMeeting}
                         deleteMeeting={deleteMeeting}
+                        endMeeting={endMeeting}
                         copiedId={copiedId}
                       />
                     ))}
@@ -521,15 +648,19 @@ export default function ZCallPage() {
 // ─── Meeting Card ─────────────────────────────────────────────────────────────
 function MeetingCard({
   meeting,
+  inviteDomain,
   copyLink,
   cancelMeeting,
   deleteMeeting,
+  endMeeting,
   copiedId,
 }: {
   meeting: ZCallMeeting;
-  copyLink: (roomId: string, meetingId: number) => void;
+  inviteDomain: string;
+  copyLink: (meeting: ZCallMeeting) => void;
   cancelMeeting: (meetingId: number) => void;
   deleteMeeting: (meetingId: number) => void;
+  endMeeting: (meetingId: number) => void;
   copiedId: number | null;
 }) {
   const isScheduled = meeting.status === 'scheduled';
@@ -571,45 +702,58 @@ function MeetingCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => copyLink(meeting.room_id, meeting.id)}
-            className="px-3 py-1.5 bg-secondary-50 text-secondary-700 rounded-full text-xs font-medium cursor-pointer hover:bg-secondary-100 transition-colors whitespace-nowrap"
-          >
-            {copiedId === meeting.id ? (
-              <><i className="ri-check-line mr-1"></i>Copié !</>
-            ) : (
-              <><i className="ri-link mr-1"></i>Copier le lien</>
-            )}
-          </button>
+        <div className="flex items-center gap-2 shrink-0">
           {(isScheduled || isActive) && (
             <a
-              href={getMeetingUrl(meeting.room_id)}
+              href={getMeetingUrl(inviteDomain, meeting)}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 cursor-pointer hover:bg-emerald-100 transition-colors"
+              className="px-4 py-2 bg-emerald-500 text-white rounded-full text-xs font-semibold cursor-pointer hover:bg-emerald-600 transition-colors flex items-center gap-1.5 whitespace-nowrap"
             >
-              <i className="ri-external-link-line text-sm"></i>
+              <i className="ri-vidicon-line text-sm"></i>
+              Lancer
             </a>
           )}
-          {isScheduled && (
+          {isActive && (
             <button
-              onClick={() => cancelMeeting(meeting.id)}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-400 cursor-pointer hover:bg-red-100 hover:text-red-600 transition-colors"
-              title="Annuler"
+              onClick={() => endMeeting(meeting.id)}
+              className="px-4 py-2 bg-red-50 text-red-600 rounded-full text-xs font-semibold cursor-pointer hover:bg-red-100 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+              title="Fermer la réunion"
             >
-              <i className="ri-close-line text-sm"></i>
+              <i className="ri-stop-circle-line text-sm"></i>
+              Terminer
             </button>
           )}
-          {(meeting.status === 'ended' || meeting.status === 'cancelled') && (
+          <div className="flex items-center gap-1.5 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
             <button
-              onClick={() => deleteMeeting(meeting.id)}
-              className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-400 cursor-pointer hover:bg-red-100 hover:text-red-600 transition-colors"
-              title="Supprimer"
+              onClick={() => copyLink(meeting)}
+              className="px-3 py-1.5 bg-secondary-50 text-secondary-700 rounded-full text-xs font-medium cursor-pointer hover:bg-secondary-100 transition-colors whitespace-nowrap"
             >
-              <i className="ri-delete-bin-line text-sm"></i>
+              {copiedId === meeting.id ? (
+                <><i className="ri-check-line mr-1"></i>Copié !</>
+              ) : (
+                <><i className="ri-link mr-1"></i>Copier le lien</>
+              )}
             </button>
-          )}
+            {isScheduled && (
+              <button
+                onClick={() => cancelMeeting(meeting.id)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-400 cursor-pointer hover:bg-red-100 hover:text-red-600 transition-colors"
+                title="Annuler"
+              >
+                <i className="ri-close-line text-sm"></i>
+              </button>
+            )}
+            {(meeting.status === 'ended' || meeting.status === 'cancelled') && (
+              <button
+                onClick={() => deleteMeeting(meeting.id)}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-red-50 text-red-400 cursor-pointer hover:bg-red-100 hover:text-red-600 transition-colors"
+                title="Supprimer"
+              >
+                <i className="ri-delete-bin-line text-sm"></i>
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

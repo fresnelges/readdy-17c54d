@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { listFiles, deleteFile, uploadToSeaweedFS, formatFileSize } from '@/lib/seaweedfs';
+import { useAuth } from '@/hooks/useAuth';
+import { listFiles, deleteFile, uploadToSeaweedFS, formatFileSize, getUserMediaFolder } from '@/lib/seaweedfs';
 import type { SeaweedFile } from '@/lib/seaweedfs';
 
 export default function MediaPage() {
+  const { user } = useAuth();
+  const userRoot = user ? getUserMediaFolder(user.id) : '';
   const [files, setFiles] = useState<SeaweedFile[]>([]);
   const [folders, setFolders] = useState<string[]>([]);
   const [totalSize, setTotalSize] = useState(0);
@@ -19,14 +22,22 @@ export default function MediaPage() {
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const stripRoot = useCallback((path: string): string => {
+    if (!userRoot) return path;
+    const prefix = `${userRoot}/`;
+    return path.startsWith(prefix) ? path.slice(prefix.length) : path;
+  }, [userRoot]);
+
   const fetchFiles = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const prefix = currentFolder ? `${currentFolder}/` : '';
+      const prefix = userRoot
+        ? (currentFolder ? `${userRoot}/${currentFolder}/` : `${userRoot}/`)
+        : (currentFolder ? `${currentFolder}/` : '');
       const data = await listFiles(prefix);
-      setFiles(data.files);
-      setFolders(data.folders);
+      setFiles(data.files.map((f) => ({ ...f, folder: stripRoot(f.folder) })));
+      setFolders(data.folders.map(stripRoot));
       setTotalSize(data.totalSize);
       setTotalSizeFormatted(data.totalSizeFormatted);
     } catch (err: unknown) {
@@ -34,7 +45,7 @@ export default function MediaPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentFolder]);
+  }, [currentFolder, userRoot, stripRoot]);
 
   useEffect(() => {
     fetchFiles();
@@ -102,7 +113,10 @@ export default function MediaPage() {
       try {
         const arrayBuffer = await file.arrayBuffer();
         const uint8 = new Uint8Array(arrayBuffer);
-        await uploadToSeaweedFS(uint8, file.name, file.type, currentFolder || 'uploads');
+        const uploadFolder = userRoot
+          ? (currentFolder ? `${userRoot}/${currentFolder}` : userRoot)
+          : (currentFolder || 'uploads');
+        await uploadToSeaweedFS(uint8, file.name, file.type, uploadFolder);
       } catch {
         // continue with next file
       }
@@ -164,13 +178,13 @@ export default function MediaPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
           <h2 className="text-xl md:text-2xl font-bold font-heading text-foreground-950">
-            Médias SeaweedFS
+            Médias
           </h2>
           <p className="text-sm text-foreground-500 mt-1">
             {currentFolder ? (
               <span className="flex items-center gap-1 flex-wrap">
                 <button onClick={navigateUp} className="hover:text-primary-500 transition-colors cursor-pointer">
-                  product-media
+                  Mes médias
                 </button>
                 {currentFolder.split('/').map((part, i, arr) => (
                   <span key={i} className="flex items-center gap-1">
@@ -185,7 +199,7 @@ export default function MediaPage() {
                 ))}
               </span>
             ) : (
-              'Racine du bucket product-media'
+              'Mes médias (dossier personnel)'
             )}
           </p>
         </div>
@@ -329,7 +343,7 @@ export default function MediaPage() {
                 <i className="ri-folder-open-line text-2xl text-foreground-400"></i>
               </div>
               <h3 className="text-lg font-semibold text-foreground-800 mb-1">Aucun fichier</h3>
-              <p className="text-sm text-foreground-500 mb-4">Le bucket SeaweedFS est vide. Importez vos premiers fichiers !</p>
+              <p className="text-sm text-foreground-500 mb-4">Votre dossier médias est vide. Importez vos premiers fichiers !</p>
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="flex items-center gap-2 px-5 py-2.5 bg-primary-500 text-background-50 rounded-full text-sm font-medium whitespace-nowrap cursor-pointer hover:bg-primary-600 transition-colors"

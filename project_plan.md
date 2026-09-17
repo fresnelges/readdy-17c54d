@@ -133,6 +133,22 @@ Sans aucune connaissance technique. ZIFEK combine les fonctionnalités de Shopif
 | created_at | timestamp | Date création |
 | updated_at | timestamp | Date modification |
 
+### Modèle d'appartenance (ownership) — produits / services / équipe / partenaires / portfolio / blog
+
+Chaque contenu créé par un utilisateur est rattaché à **deux** identifiants :
+- **`owner`** (int) = la personne qui a créé le contenu (`users.id`).
+- **`idcommerce`** (int) = la boutique à laquelle le contenu appartient.
+  - Commerçant propriétaire → son propre `id`.
+  - Membre du staff → l'id du commerçant propriétaire (`users.idcommerce`).
+
+Ces deux champs sont tamponnés à chaque création, et les listes filtrent par `idcommerce`
+pour que toute l'équipe d'une boutique partage le même contenu. Le calcul est centralisé dans
+`src/lib/ownership.ts` (`getCommerceId`, `getOwnerId`, `getOwnership`) et `users.idcommerce`
+est exposé via `useAuth` (`ZifekUser.idcommerce`).
+
+Tables concernées : `product_items`, `nospartenairesservices`, `equipe`, `partenaires`,
+`portfolio`, `blog_articles` (colonne `idcommerce` ajoutée ; `blog_articles.author_id` joue le rôle de `owner`).
+
 ## 5. Backend / Intégrations Tiers
 
 - **Supabase** : Base de données, authentification, stockage fichiers, edge functions

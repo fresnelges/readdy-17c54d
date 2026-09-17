@@ -156,3 +156,150 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0;
   animation: cardIn 0.45s cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
 }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, 16px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.animate-toast-in {
+  animation: toastIn 0.25s ease-out;
+}
+
+@keyframes badgeBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.animate-badge-blink {
+  animation: badgeBlink 0.9s ease-in-out 2;
+}
+
+/* Placeholder des éditeurs de documents (contentEditable) */
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: oklch(var(--foreground-300));
+  pointer-events: none;
+}
+
+/* ── Éditeur de documents texte ── */
+.word-editor p,
+.word-editor li,
+.word-editor blockquote {
+  margin: 0 0 0.35em;
+}
+.word-editor h1 {
+  font-size: 1.9em;
+  font-weight: 700;
+  margin: 0.6em 0 0.35em;
+  line-height: 1.3;
+}
+.word-editor h2 {
+  font-size: 1.45em;
+  font-weight: 700;
+  margin: 0.6em 0 0.3em;
+  line-height: 1.35;
+}
+.word-editor h3 {
+  font-size: 1.2em;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+.word-editor h4 {
+  font-size: 1.05em;
+  font-weight: 600;
+  margin: 0.5em 0 0.25em;
+}
+.word-editor ul {
+  list-style: disc;
+  padding-left: 26px;
+  margin: 0 0 0.35em;
+}
+.word-editor ol {
+  list-style: decimal;
+  padding-left: 26px;
+  margin: 0 0 0.35em;
+}
+.word-editor a {
+  color: oklch(var(--primary-600));
+  text-decoration: underline;
+}
+.word-editor img {
+  max-width: 100%;
+  height: auto;
+}
+.word-editor blockquote {
+  border-left: 3px solid oklch(var(--background-300));
+  padding-left: 14px;
+  color: oklch(var(--foreground-600));
+  font-style: italic;
+}
+.word-editor hr {
+  border: none;
+  border-top: 1px solid oklch(var(--background-300));
+  margin: 16px 0;
+}
+.word-editor td {
+  vertical-align: top;
+}
+
+.editor-spaced p {
+  margin-bottom: 1em;
+}
+
+.editor-marks p::after {
+  content: '¶';
+  margin-left: 3px;
+  color: oklch(var(--foreground-300));
+  font-size: 0.8em;
+}
+.editor-marks p,
+.editor-marks h1,
+.editor-marks h2,
+.editor-marks h3,
+.editor-marks li,
+.editor-marks blockquote {
+  outline: 1px dashed oklch(var(--background-300) / 0.8);
+}
+
+::highlight(word-find) {
+  background-color: #fcd34d;
+  color: inherit;
+}
+
+/* ── Commentaires (surlignage des passages) ── */
+.word-editor .doc-comment-highlight {
+  background: rgba(253, 224, 71, 0.45);
+  border-radius: 2px;
+  padding: 1px 0;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.word-editor .doc-comment-highlight.doc-comment-resolved {
+  background: rgba(203, 213, 225, 0.4);
+  text-decoration: line-through;
+  opacity: 0.65;
+}
+@keyframes commentFlash {
+  0%, 55% {
+    background: rgba(251, 191, 36, 0.9);
+  }
+  100% {
+    background: rgba(253, 224, 71, 0.45);
+  }
+}
+.word-editor .doc-comment-highlight.doc-comment-flash {
+  animation: commentFlash 1.6s ease-out;
+}
+
+/* ── Suivi des modifications (diff mot à mot) ── */
+.track-add {
+  background: rgba(22, 163, 74, 0.16);
+  border-radius: 2px;
+  padding: 1px 0;
+}
+.track-del {
+  background: rgba(220, 38, 38, 0.12);
+  text-decoration: line-through;
+  text-decoration-color: rgba(220, 38, 38, 0.75);
+  border-radius: 2px;
+  padding: 1px 0;
+}

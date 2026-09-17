@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useTenant } from '@/hooks/useTenant';
+import { useSectionContent } from '@/hooks/useSectionContent';
 
 interface PartnerItem {
   id: number;
@@ -19,6 +20,7 @@ export default function PartenairesPublic() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { tenant, isTenant } = useTenant();
+  const { before, highlight, subtitle } = useSectionContent('partenaires');
 
   useEffect(() => {
     setLoading(true);
@@ -27,7 +29,7 @@ export default function PartenairesPublic() {
       .select('*');
     
     if (isTenant && tenant) {
-      query = query.eq('owner', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
     
     query.order('created_at', { ascending: false })
@@ -46,10 +48,12 @@ export default function PartenairesPublic() {
         <div className="absolute inset-0 bg-gradient-to-b from-background-100/50 to-transparent"></div>
         <div className="relative w-full px-4 md:px-6 max-w-7xl mx-auto text-center">
           <h1 className="text-3xl md:text-5xl font-bold font-heading text-foreground-950 mb-4">
-            Nos <span className="text-primary-500">Partenaires</span>
+            {before}
+            {before && highlight ? ' ' : ''}
+            {highlight && <span className="text-primary-500">{highlight}</span>}
           </h1>
           <p className="text-sm md:text-base text-foreground-500 max-w-xl mx-auto">
-            Découvrez les entreprises et collaborateurs qui nous font confiance
+            {subtitle}
           </p>
         </div>
       </section>

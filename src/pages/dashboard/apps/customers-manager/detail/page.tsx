@@ -3,29 +3,32 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 
-interface OrderItem {
+interface Commande {
   id: number;
-  product_name: string;
-  quantity: number;
-  unit_price: number;
-  final_price: number;
-  subtotal: number;
+  titre: string;
+  nomclient: string;
+  email: string;
+  tel: string;
+  adresse: string;
+  details: string;
+  detailssup: string;
+  totalht: string;
+  totalttc: string;
+  sommepayee: string;
+  monaie: string;
+  methodepayment: string;
+  date_time: string;
+  statut_com_vendeur: string;
+  quantite: number;
+  notevendeur: string;
 }
 
-interface OrderHeader {
+interface Transaction {
   id: number;
-  status: string;
-  currency: string;
-  subtotal_items: number;
-  tax_total: number;
-  shipping_total: number;
-  discount_price: number;
-  payment_provider: string;
-  recipient: Record<string, unknown>;
-  created_at: string;
-  customer_notes: string;
-  admin_notes?: string;
-  items: OrderItem[];
+  montant: number;
+  methode: string;
+  statut: string;
+  date_time: string;
 }
 
 interface SiteVisit {
@@ -110,10 +113,11 @@ interface ClientInfo {
   address: string;
 }
 
-type TabKey = 'orders' | 'visits' | 'cart' | 'contacts' | 'fidelite' | 'finances' | 'notes';
+type TabKey = 'orders' | 'transactions' | 'visits' | 'cart' | 'contacts' | 'fidelite' | 'finances' | 'notes';
 
 const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'orders', label: 'Commandes', icon: 'ri-file-list-3-line' },
+  { key: 'transactions', label: 'Transactions', icon: 'ri-exchange-dollar-line' },
   { key: 'visits', label: 'Visites', icon: 'ri-eye-line' },
   { key: 'cart', label: 'Panier', icon: 'ri-shopping-cart-line' },
   { key: 'contacts', label: 'Messages', icon: 'ri-message-3-line' },
@@ -121,6 +125,12 @@ const tabs: { key: TabKey; label: string; icon: string }[] = [
   { key: 'finances', label: 'Finances', icon: 'ri-bank-line' },
   { key: 'notes', label: 'Notes', icon: 'ri-sticky-note-line' },
 ];
+
+function toNum(v: unknown): number {
+  if (v == null || v === '') return 0;
+  const n = parseFloat(String(v).replace(/[^\d.-]/g, ''));
+  return Number.isFinite(n) ? n : 0;
+}
 
 export default function CustomerDetailPage({ initialTab = 'orders' }: { initialTab?: TabKey } = {}) {
   const params = useParams<{ customerId?: string; clientId?: string }>();
@@ -134,7 +144,8 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
   const [contactOpen, setContactOpen] = useState(false);
 
   const [clientInfo, setClientInfo] = useState<ClientInfo>({ name: '', email: '', phone: '', address: '' });
-  const [orders, setOrders] = useState<OrderHeader[]>([]);
+  const [commandes, setCommandes] = useState<Commande[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [siteVisits, setSiteVisits] = useState<SiteVisit[]>([]);
   const [productVisits, setProductVisits] = useState<ProductVisit[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -151,68 +162,75 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
     setError(null);
     try {
       const commerceId = user.id;
+      const clientInt = parseInt(customerId, 10);
+      const hasIntId = !Number.isNaN(clientInt);
 
-      // Client info from users table
-      const { data: userData } = await supabase
-        .from('users')
-        .select('id, name, email, telephone, adresse')
-        .eq('id', customerId)
+      // Client info depuis clientshop (scopé au commerçant)
+      const { data: shopClient } = await supabase
+        .from('clientshop')
+        .select('*')
+        .eq('idshop', commerceId)
+        .eq('idclient', customerId)
         .maybeSingle();
 
-      if (userData) {
+      if (shopClient) {
         setClientInfo({
-          name: userData.name || '',
-          email: userData.email || '',
-          phone: userData.telephone || '',
-          address: userData.adresse || '',
+          name: shopClient.nomclient || '',
+          email: shopClient.email || '',
+          phone: shopClient.telephone || '',
+          address: shopClient.adresse || '',
         });
       }
 
-      // Client info from mesclients
-      const { data: mesclientData } = await supabase
-        .from('mesclients')
-        .select('*')
-        .eq('idclient', customerId)
-        .eq('idshop', commerceId)
-        .maybeSingle();
+      // Client info enrichie depuis users (si id numérique)
+      if (hasIntId) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id, name, email, telephone, adresse')
+          .eq('id', clientInt)
+          .maybeSingle();
 
-      if (mesclientData && !userData?.name) {
-        setClientInfo(prev => ({ ...prev, name: prev.name || '' }));
+        if (userData) {
+          setClientInfo(prev => ({
+            name: prev.name || userData.name || '',
+            email: prev.email || userData.email || '',
+            phone: prev.phone || userData.telephone || '',
+            address: prev.address || userData.adresse || '',
+          }));
+        }
       }
 
-      // Orders from order_headers
-      const { data: ordersData } = await supabase
-        .from('order_headers')
-        .select('*')
-        .eq('customer_id', customerId)
-        .order('created_at', { ascending: false });
-
-      if (ordersData && ordersData.length > 0) {
-        const ordersWithItems = await Promise.all(
-          ordersData.map(async (o) => {
-            const { data: items } = await supabase
-              .from('order_items')
-              .select('*')
-              .eq('order_id', o.id);
-            const recipient = o.recipient as Record<string, unknown> || {};
-            if (!clientInfo.name && recipient.name) setClientInfo(prev => ({ ...prev, name: String(recipient.name || '') }));
-            if (!clientInfo.email && recipient.email) setClientInfo(prev => ({ ...prev, email: String(recipient.email || '') }));
-            if (!clientInfo.phone && recipient.phone) setClientInfo(prev => ({ ...prev, phone: String(recipient.phone || '') }));
-            return { ...o, items: (items || []) as OrderItem[] };
-          })
-        );
-        setOrders(ordersWithItems as OrderHeader[]);
-      }
-
-      // Orders from commande table
+      // Commandes du commerçant pour ce client
       const { data: commandesData } = await supabase
         .from('commande')
         .select('*')
+        .eq('idvendeur', commerceId)
         .eq('user_id', customerId)
-        .order('date_time', { ascending: false })
-        .limit(50);
+        .order('date_time', { ascending: false });
 
-      // Site visits
+      if (commandesData && commandesData.length > 0) {
+        setCommandes(commandesData as Commande[]);
+        const first = commandesData[0];
+        setClientInfo(prev => ({
+          name: prev.name || first.nomclient || '',
+          email: prev.email || first.email || '',
+          phone: prev.phone || first.tel || '',
+          address: prev.address || first.adresse || '',
+        }));
+      }
+
+      // Transactions (paiements) du commerçant pour ce client
+      if (hasIntId) {
+        const { data: transData } = await supabase
+          .from('transaction')
+          .select('*')
+          .eq('idcommerce', commerceId)
+          .eq('idclient', clientInt)
+          .order('date_time', { ascending: false });
+        setTransactions((transData || []) as Transaction[]);
+      }
+
+      // Visites site
       const { data: siteVisitsData } = await supabase
         .from('visitesiteweb')
         .select('*')
@@ -221,7 +239,7 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
         .limit(100);
       setSiteVisits((siteVisitsData || []) as SiteVisit[]);
 
-      // Product visits
+      // Visites produits
       const { data: prodVisitsData } = await supabase
         .from('visiteproduitsiteweb')
         .select('*')
@@ -230,7 +248,7 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
         .limit(100);
       setProductVisits((prodVisitsData || []) as ProductVisit[]);
 
-      // Cart
+      // Panier
       const { data: cartData } = await supabase
         .from('panier')
         .select('*')
@@ -238,7 +256,7 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
         .order('date', { ascending: false });
       setCartItems((cartData || []) as CartItem[]);
 
-      // Contact messages
+      // Messages de contact
       const { data: contactData } = await supabase
         .from('contact_messages')
         .select('*')
@@ -247,87 +265,73 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
       setContactMessages((contactData || []) as ContactMessage[]);
 
       // Fidélité
-      const { data: fideliteData } = await supabase
-        .from('pointfidelite')
-        .select('*')
-        .eq('user_id', customerId)
-        .eq('idcommerce', commerceId)
-        .maybeSingle();
-      if (fideliteData) {
-        setFidelitePoints(Number(fideliteData.points) || 0);
-      }
+      if (hasIntId) {
+        const { data: fideliteData } = await supabase
+          .from('pointfidelite')
+          .select('*')
+          .eq('user_id', clientInt)
+          .eq('idcommerce', commerceId)
+          .maybeSingle();
+        if (fideliteData) {
+          setFidelitePoints(toNum(fideliteData.points));
+        }
 
-      const { data: fideliteTransData } = await supabase
-        .from('pointtransactions')
-        .select('*')
-        .eq('user_id', customerId)
-        .eq('idcommerce', commerceId)
-        .order('created_at', { ascending: false })
-        .limit(100);
-      setFideliteTrans((fideliteTransData || []) as FideliteTransaction[]);
+        const { data: fideliteTransData } = await supabase
+          .from('pointtransactions')
+          .select('*')
+          .eq('user_id', clientInt)
+          .eq('idcommerce', commerceId)
+          .order('created_at', { ascending: false })
+          .limit(100);
+        setFideliteTrans((fideliteTransData || []) as FideliteTransaction[]);
 
-      // Créances
-      const { data: creancesData } = await supabase
-        .from('creances')
-        .select('*')
-        .eq('client_id', customerId)
-        .eq('idcommerce', commerceId)
-        .order('created_at', { ascending: false });
-      setCreances((creancesData || []) as Creance[]);
+        // Créances
+        const { data: creancesData } = await supabase
+          .from('creances')
+          .select('*')
+          .eq('client_id', clientInt)
+          .eq('idcommerce', commerceId)
+          .order('created_at', { ascending: false });
+        setCreances((creancesData || []) as Creance[]);
 
-      // Factures
-      const { data: facturesData } = await supabase
-        .from('factures')
-        .select('*')
-        .eq('client_id', customerId)
-        .eq('idcommerce', commerceId)
-        .order('created_at', { ascending: false });
-      setFactures((facturesData || []) as Facture[]);
+        // Factures
+        const { data: facturesData } = await supabase
+          .from('factures')
+          .select('*')
+          .eq('client_id', clientInt)
+          .eq('idcommerce', commerceId)
+          .order('created_at', { ascending: false });
+        setFactures((facturesData || []) as Facture[]);
 
-      // Devis
-      const { data: devisData } = await supabase
-        .from('devis')
-        .select('*')
-        .eq('client_id', customerId)
-        .eq('idcommerce', commerceId)
-        .order('created_at', { ascending: false });
-      setDevis((devisData || []) as Devis[]);
-
-      // If no name yet, try from commande
-      if (!clientInfo.name && commandesData && commandesData.length > 0) {
-        setClientInfo(prev => ({
-          ...prev,
-          name: commandesData[0].nomclient || '',
-          email: prev.email || commandesData[0].email || '',
-          phone: prev.phone || commandesData[0].tel || '',
-          address: prev.address || commandesData[0].adresse || '',
-        }));
+        // Devis
+        const { data: devisData } = await supabase
+          .from('devis')
+          .select('*')
+          .eq('client_id', clientInt)
+          .eq('idcommerce', commerceId)
+          .order('created_at', { ascending: false });
+        setDevis((devisData || []) as Devis[]);
       }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Erreur lors du chargement');
     } finally {
       setLoading(false);
     }
-  }, [user, customerId, clientInfo.name, clientInfo.email, clientInfo.phone]);
+  }, [user, customerId]);
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   const formatDate = (d: string) => {
     if (!d) return '-';
     return new Date(d).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
-  const statusBadge = (s: string) => {
-    const map: Record<string, string> = {
-      pending_payment: 'bg-background-200/70 text-foreground-600',
-      paid: 'bg-secondary-100 text-secondary-800',
-      processing: 'bg-accent-100 text-accent-800',
-      shipped: 'bg-primary-100 text-primary-800',
-      delivered: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-700',
-      refunded: 'bg-background-200/70 text-foreground-500',
-    };
-    return `inline-block px-2 py-0.5 rounded-full text-xs font-medium ${map[s] || 'bg-background-100 text-foreground-600'}`;
+  const commandeStatusBadge = (s: string) => {
+    const val = (s || '').toLowerCase();
+    if (val.includes('annul') || val.includes('refus')) return 'bg-red-100 text-red-700';
+    if (val.includes('livr') || val.includes('termin') || val.includes('pay') || val.includes('accept') || val.includes('confir')) return 'bg-green-100 text-green-800';
+    if (val.includes('attente') || val.includes('encours') || val.includes('en cours')) return 'bg-accent-100 text-accent-800';
+    return 'bg-background-100 text-foreground-600';
   };
 
   if (loading) {
@@ -340,13 +344,15 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
 
   const waNumber = clientInfo.phone ? clientInfo.phone.replace(/[^0-9+]/g, '') : '';
   const hasContact = clientInfo.email || clientInfo.phone;
+  const totalSpent = commandes.reduce((s, o) => s + (toNum(o.sommepayee) || toNum(o.totalttc)), 0)
+    + transactions.reduce((s, t) => s + toNum(t.montant), 0);
 
   return (
     <div className="p-4 md:p-6">
       {/* Back + Header */}
-      <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-sm text-foreground-500 hover:text-foreground-800 mb-3 cursor-pointer">
+      <button onClick={() => navigate('/dashboard/customers-manager')} className="flex items-center gap-1 text-sm text-foreground-500 hover:text-foreground-800 mb-3 cursor-pointer">
         <i className="ri-arrow-left-line"></i>
-        <span>Retour</span>
+        <span>Retour à la liste</span>
       </button>
 
       <div className="bg-background-50 border border-background-200/70 rounded-lg p-5 mb-6">
@@ -380,22 +386,23 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
               </div>
             </div>
           </div>
-          <div className="flex gap-4 text-center items-start">
+          <div className="flex gap-4 text-center items-start flex-wrap">
             <div className="bg-background-100 rounded-lg px-4 py-2">
               <p className="text-xs text-foreground-500">Commandes</p>
-              <p className="text-lg font-bold text-foreground-950">{orders.length}</p>
+              <p className="text-lg font-bold text-foreground-950">{commandes.length}</p>
+            </div>
+            <div className="bg-background-100 rounded-lg px-4 py-2">
+              <p className="text-xs text-foreground-500">Transactions</p>
+              <p className="text-lg font-bold text-foreground-950">{transactions.length}</p>
             </div>
             <div className="bg-background-100 rounded-lg px-4 py-2">
               <p className="text-xs text-foreground-500">Total dépensé</p>
-              <p className="text-lg font-bold text-primary-600">
-                {orders.reduce((s, o) => s + (o.subtotal_items || 0) + (o.tax_total || 0) - (o.discount_price || 0), 0).toLocaleString()} MAD
-              </p>
+              <p className="text-lg font-bold text-primary-600">{totalSpent.toLocaleString()} MAD</p>
             </div>
             <div className="bg-background-100 rounded-lg px-4 py-2">
               <p className="text-xs text-foreground-500">Points fidélité</p>
               <p className="text-lg font-bold text-accent-600">{fidelitePoints}</p>
             </div>
-            {/* ── Contacter + Créer commande ── */}
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => navigate(`/dashboard/orders/new?customerId=${customerId}`)}
@@ -489,7 +496,10 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
       {/* Tab Content */}
       <div className="bg-background-50 border border-background-200/70 rounded-lg overflow-hidden">
         {activeTab === 'orders' && (
-          <OrdersTab orders={orders} formatDate={formatDate} statusBadge={statusBadge} />
+          <OrdersTab commandes={commandes} formatDate={formatDate} commandeStatusBadge={commandeStatusBadge} />
+        )}
+        {activeTab === 'transactions' && (
+          <TransactionsTab transactions={transactions} formatDate={formatDate} />
         )}
         {activeTab === 'visits' && (
           <VisitsTab siteVisits={siteVisits} productVisits={productVisits} formatDate={formatDate} />
@@ -507,7 +517,7 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
           <FinancesTab creances={creances} factures={factures} devis={devis} formatDate={formatDate} />
         )}
         {activeTab === 'notes' && (
-          <NotesTab orders={orders} onNoteSaved={fetchAll} />
+          <NotesTab commandes={commandes} onNoteSaved={fetchAll} />
         )}
       </div>
     </div>
@@ -515,8 +525,8 @@ export default function CustomerDetailPage({ initialTab = 'orders' }: { initialT
 }
 
 /* ──────────────── Orders Tab ──────────────── */
-function OrdersTab({ orders, formatDate, statusBadge }: { orders: OrderHeader[]; formatDate: (d: string) => string; statusBadge: (s: string) => string }) {
-  if (orders.length === 0) {
+function OrdersTab({ commandes, formatDate, commandeStatusBadge }: { commandes: Commande[]; formatDate: (d: string) => string; commandeStatusBadge: (s: string) => string }) {
+  if (commandes.length === 0) {
     return <div className="py-14 text-center text-foreground-500 text-sm">Aucune commande trouvée pour ce client</div>;
   }
   return (
@@ -524,30 +534,77 @@ function OrdersTab({ orders, formatDate, statusBadge }: { orders: OrderHeader[];
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-background-100 text-xs font-semibold text-foreground-500 uppercase">
-            <th className="text-left px-4 py-3">N° Commande</th>
+            <th className="text-left px-4 py-3">N°</th>
             <th className="text-left px-4 py-3">Date</th>
+            <th className="text-left px-4 py-3">Détail</th>
             <th className="text-left px-4 py-3">Statut</th>
-            <th className="text-left px-4 py-3">Produits</th>
             <th className="text-right px-4 py-3">Total</th>
-            <th className="text-right px-4 py-3 hidden md:table-cell">Paiement</th>
+            <th className="text-right px-4 py-3 hidden md:table-cell">Payé</th>
+            <th className="text-left px-4 py-3 hidden md:table-cell">Paiement</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-background-200/70">
-          {orders.map((o) => (
+          {commandes.map((o) => (
             <tr key={o.id} className="hover:bg-background-50/50">
               <td className="px-4 py-3 font-mono text-xs text-foreground-600">#{o.id}</td>
-              <td className="px-4 py-3 text-foreground-600 text-xs">{formatDate(o.created_at)}</td>
-              <td className="px-4 py-3"><span className={statusBadge(o.status)}>{o.status}</span></td>
+              <td className="px-4 py-3 text-foreground-600 text-xs whitespace-nowrap">{formatDate(o.date_time)}</td>
               <td className="px-4 py-3">
-                {o.items.slice(0, 3).map((it) => (
-                  <div key={it.id} className="text-foreground-800 text-xs">{it.product_name} ×{it.quantity}</div>
-                ))}
-                {o.items.length > 3 && <span className="text-xs text-foreground-400">+{o.items.length - 3} autres</span>}
+                <span className="text-foreground-800 text-xs font-medium">{o.titre || o.details || '-'}</span>
+                {o.quantite > 1 && <span className="text-xs text-foreground-400 ml-1">×{o.quantite}</span>}
               </td>
-              <td className="px-4 py-3 text-right font-semibold text-foreground-900">
-                {((o.subtotal_items || 0) + (o.tax_total || 0) - (o.discount_price || 0)).toLocaleString()} {o.currency}
+              <td className="px-4 py-3">
+                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${commandeStatusBadge(o.statut_com_vendeur)}`}>
+                  {o.statut_com_vendeur || 'En attente'}
+                </span>
               </td>
-              <td className="px-4 py-3 text-right text-xs text-foreground-500 hidden md:table-cell">{o.payment_provider}</td>
+              <td className="px-4 py-3 text-right font-semibold text-foreground-900 whitespace-nowrap">
+                {toNum(o.totalttc || o.sommepayee).toLocaleString()} {o.monaie || 'MAD'}
+              </td>
+              <td className="px-4 py-3 text-right text-foreground-600 hidden md:table-cell whitespace-nowrap">
+                {toNum(o.sommepayee).toLocaleString()} {o.monaie || 'MAD'}
+              </td>
+              <td className="px-4 py-3 text-left text-xs text-foreground-500 hidden md:table-cell">{o.methodepayment || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ──────────────── Transactions Tab ──────────────── */
+function TransactionsTab({ transactions, formatDate }: { transactions: Transaction[]; formatDate: (d: string) => string }) {
+  if (transactions.length === 0) {
+    return <div className="py-14 text-center text-foreground-500 text-sm">Aucune transaction trouvée pour ce client</div>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="bg-background-100 text-xs font-semibold text-foreground-500 uppercase">
+            <th className="text-left px-4 py-3">N°</th>
+            <th className="text-left px-4 py-3">Date</th>
+            <th className="text-right px-4 py-3">Montant</th>
+            <th className="text-left px-4 py-3">Méthode</th>
+            <th className="text-left px-4 py-3">Statut</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-background-200/70">
+          {transactions.map((t) => (
+            <tr key={t.id} className="hover:bg-background-50/50">
+              <td className="px-4 py-3 font-mono text-xs text-foreground-600">#{t.id}</td>
+              <td className="px-4 py-3 text-foreground-600 text-xs whitespace-nowrap">{formatDate(t.date_time)}</td>
+              <td className="px-4 py-3 text-right font-semibold text-primary-600 whitespace-nowrap">{toNum(t.montant).toLocaleString()} MAD</td>
+              <td className="px-4 py-3 text-foreground-700 text-xs">{t.methode || '-'}</td>
+              <td className="px-4 py-3">
+                <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
+                  (t.statut || '').toLowerCase().includes('annul') || (t.statut || '').toLowerCase().includes('echou')
+                    ? 'bg-red-100 text-red-700'
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                  {t.statut || 'Payée'}
+                </span>
+              </td>
             </tr>
           ))}
         </tbody>
@@ -581,7 +638,7 @@ function VisitsTab({ siteVisits, productVisits, formatDate }: { siteVisits: Site
               <tbody className="divide-y divide-background-100">
                 {siteVisits.map((v) => (
                   <tr key={v.id} className="hover:bg-background-50/50">
-                    <td className="px-3 py-2 text-foreground-600">{formatDate(v.date)}</td>
+                    <td className="px-3 py-2 text-foreground-600 whitespace-nowrap">{formatDate(v.date)}</td>
                     <td className="px-3 py-2 text-foreground-500 font-mono">{v.ip}</td>
                     <td className="px-3 py-2 text-foreground-600 hidden sm:table-cell">{v.page || '-'}</td>
                     <td className="px-3 py-2 text-foreground-500 hidden md:table-cell">{v.source || '-'}</td>
@@ -614,7 +671,7 @@ function VisitsTab({ siteVisits, productVisits, formatDate }: { siteVisits: Site
               <tbody className="divide-y divide-background-100">
                 {productVisits.map((v) => (
                   <tr key={v.id} className="hover:bg-background-50/50">
-                    <td className="px-3 py-2 text-foreground-600">{formatDate(v.date)}</td>
+                    <td className="px-3 py-2 text-foreground-600 whitespace-nowrap">{formatDate(v.date)}</td>
                     <td className="px-3 py-2 text-foreground-800">#{v.id_produit}</td>
                     <td className="px-3 py-2 text-foreground-500 hidden sm:table-cell truncate max-w-[200px]">{v.lien || '-'}</td>
                     <td className="px-3 py-2 text-foreground-500 font-mono hidden md:table-cell">{v.ip}</td>
@@ -648,7 +705,7 @@ function CartTab({ cartItems, formatDate }: { cartItems: CartItem[]; formatDate:
         <tbody className="divide-y divide-background-200/70">
           {cartItems.map((item) => (
             <tr key={item.id} className="hover:bg-background-50/50">
-              <td className="px-4 py-3 text-xs text-foreground-600">{formatDate(item.date)}</td>
+              <td className="px-4 py-3 text-xs text-foreground-600 whitespace-nowrap">{formatDate(item.date)}</td>
               <td className="px-4 py-3 text-foreground-800">{item.product_name || '-'}</td>
               <td className="px-4 py-3 text-center text-foreground-700">{item.product_quantity || '1'}</td>
               <td className="px-4 py-3 text-right font-semibold text-foreground-900">{item.prix || '0'} MAD</td>
@@ -680,7 +737,7 @@ function ContactsTab({ messages, formatDate }: { messages: ContactMessage[]; for
               ) : (
                 <span className="text-xs bg-background-200/70 text-foreground-500 px-2 py-0.5 rounded-full">En attente</span>
               )}
-              <span className="text-xs text-foreground-400">{formatDate(m.created_at)}</span>
+              <span className="text-xs text-foreground-400 whitespace-nowrap">{formatDate(m.created_at)}</span>
             </div>
           </div>
           <p className="text-sm text-foreground-600 leading-relaxed">{m.message}</p>
@@ -721,7 +778,7 @@ function FideliteTab({ points, transactions, formatDate }: { points: number; tra
               <tbody className="divide-y divide-background-100">
                 {transactions.map((t) => (
                   <tr key={t.id} className="hover:bg-background-50/50">
-                    <td className="px-3 py-2 text-foreground-600">{formatDate(t.created_at)}</td>
+                    <td className="px-3 py-2 text-foreground-600 whitespace-nowrap">{formatDate(t.created_at)}</td>
                     <td className="px-3 py-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${t.type === 'gain' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
                         {t.type === 'gain' ? 'Gagné' : 'Utilisé'}
@@ -770,8 +827,8 @@ function FinancesTab({ creances, factures, devis, formatDate }: { creances: Crea
                   <tr key={f.id} className="hover:bg-background-50/50">
                     <td className="px-3 py-2 font-mono text-foreground-600">{f.numero}</td>
                     <td className="px-3 py-2 text-foreground-800">{f.objet}</td>
-                    <td className="px-3 py-2 text-right text-foreground-700">{f.montant_ht?.toLocaleString()} MAD</td>
-                    <td className="px-3 py-2 text-right font-semibold text-foreground-800 hidden sm:table-cell">{f.montant_ttc?.toLocaleString()} MAD</td>
+                    <td className="px-3 py-2 text-right text-foreground-700">{toNum(f.montant_ht).toLocaleString()} MAD</td>
+                    <td className="px-3 py-2 text-right font-semibold text-foreground-800 hidden sm:table-cell">{toNum(f.montant_ttc).toLocaleString()} MAD</td>
                     <td className="px-3 py-2 text-foreground-500 hidden md:table-cell">{f.date_echeance ? new Date(f.date_echeance).toLocaleDateString('fr-FR') : '-'}</td>
                     <td className="px-3 py-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${f.statut === 'payée' || f.statut === 'paye' ? 'bg-green-100 text-green-700' : 'bg-background-200/70 text-foreground-600'}`}>
@@ -812,8 +869,8 @@ function FinancesTab({ creances, factures, devis, formatDate }: { creances: Crea
                   <tr key={d.id} className="hover:bg-background-50/50">
                     <td className="px-3 py-2 font-mono text-foreground-600">{d.numero}</td>
                     <td className="px-3 py-2 text-foreground-800">{d.objet}</td>
-                    <td className="px-3 py-2 text-right text-foreground-700">{d.montant_ht?.toLocaleString()} MAD</td>
-                    <td className="px-3 py-2 text-right font-semibold text-foreground-800 hidden sm:table-cell">{d.montant_ttc?.toLocaleString()} MAD</td>
+                    <td className="px-3 py-2 text-right text-foreground-700">{toNum(d.montant_ht).toLocaleString()} MAD</td>
+                    <td className="px-3 py-2 text-right font-semibold text-foreground-800 hidden sm:table-cell">{toNum(d.montant_ttc).toLocaleString()} MAD</td>
                     <td className="px-3 py-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${d.statut === 'accepté' || d.statut === 'accepte' ? 'bg-green-100 text-green-700' : d.statut === 'refusé' ? 'bg-red-100 text-red-700' : 'bg-background-200/70 text-foreground-600'}`}>
                         {d.statut}
@@ -853,9 +910,9 @@ function FinancesTab({ creances, factures, devis, formatDate }: { creances: Crea
                 {creances.map((c) => (
                   <tr key={c.id} className="hover:bg-background-50/50">
                     <td className="px-3 py-2 text-foreground-800">{c.client_nom}</td>
-                    <td className="px-3 py-2 text-right text-foreground-700">{c.montant?.toLocaleString()} MAD</td>
-                    <td className="px-3 py-2 text-right text-foreground-600 hidden sm:table-cell">{c.montant_recu?.toLocaleString()} MAD</td>
-                    <td className="px-3 py-2 text-right font-semibold text-red-600">{(c.montant - c.montant_recu)?.toLocaleString()} MAD</td>
+                    <td className="px-3 py-2 text-right text-foreground-700">{toNum(c.montant).toLocaleString()} MAD</td>
+                    <td className="px-3 py-2 text-right text-foreground-600 hidden sm:table-cell">{toNum(c.montant_recu).toLocaleString()} MAD</td>
+                    <td className="px-3 py-2 text-right font-semibold text-red-600">{toNum(c.montant - c.montant_recu).toLocaleString()} MAD</td>
                     <td className="px-3 py-2 text-foreground-500 hidden md:table-cell">{c.date_echeance ? new Date(c.date_echeance).toLocaleDateString('fr-FR') : '-'}</td>
                     <td className="px-3 py-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full ${c.statut === 'payée' || c.statut === 'paye' ? 'bg-green-100 text-green-700' : 'bg-accent-100 text-accent-700'}`}>
@@ -874,26 +931,24 @@ function FinancesTab({ creances, factures, devis, formatDate }: { creances: Crea
 }
 
 /* ──────────────── Notes Tab ──────────────── */
-function NotesTab({ orders, onNoteSaved }: { orders: OrderHeader[]; onNoteSaved: () => void }) {
+function NotesTab({ commandes, onNoteSaved }: { commandes: Commande[]; onNoteSaved: () => void }) {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editText, setEditText] = useState('');
   const [saving, setSaving] = useState(false);
-  const [generalNote, setGeneralNote] = useState('');
-  const [savingGeneral, setSavingGeneral] = useState(false);
 
-  const ordersWithNotes = orders.filter(o => o.admin_notes);
+  const commandesWithNotes = commandes.filter(o => o.notevendeur);
 
-  const startEdit = (order: OrderHeader) => {
-    setEditingId(order.id);
-    setEditText(order.admin_notes || '');
+  const startEdit = (o: Commande) => {
+    setEditingId(o.id);
+    setEditText(o.notevendeur || '');
   };
 
-  const saveNote = async (orderId: number) => {
+  const saveNote = async (commandeId: number) => {
     setSaving(true);
     const { error } = await supabase
-      .from('order_headers')
-      .update({ admin_notes: editText })
-      .eq('id', orderId);
+      .from('commande')
+      .update({ notevendeur: editText })
+      .eq('id', commandeId);
     if (!error) {
       setEditingId(null);
       onNoteSaved();
@@ -903,27 +958,24 @@ function NotesTab({ orders, onNoteSaved }: { orders: OrderHeader[]; onNoteSaved:
 
   return (
     <div className="divide-y divide-background-200/70">
-      {ordersWithNotes.length === 0 ? (
+      {commandesWithNotes.length === 0 ? (
         <div className="py-14 text-center text-foreground-500 text-sm">
           <i className="ri-sticky-note-line text-3xl text-foreground-300 block mb-2"></i>
-          Aucune note interne. Ajoutez des notes admin depuis une commande.
+          Aucune note interne sur les commandes de ce client.
         </div>
       ) : (
-        ordersWithNotes.map((o) => (
+        commandesWithNotes.map((o) => (
           <div key={o.id} className="p-4 hover:bg-background-50/50">
             <div className="flex items-start justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono text-foreground-500">Commande #{o.id}</span>
                 <span className="text-xs text-foreground-400">
-                  {new Date(o.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {new Date(o.date_time).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
                 </span>
               </div>
               {editingId === o.id ? (
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setEditingId(null)}
-                    className="text-xs text-foreground-400 hover:text-foreground-600 cursor-pointer"
-                  >
+                  <button onClick={() => setEditingId(null)} className="text-xs text-foreground-400 hover:text-foreground-600 cursor-pointer">
                     Annuler
                   </button>
                   <button
@@ -935,10 +987,7 @@ function NotesTab({ orders, onNoteSaved }: { orders: OrderHeader[]; onNoteSaved:
                   </button>
                 </div>
               ) : (
-                <button
-                  onClick={() => startEdit(o)}
-                  className="text-xs text-foreground-400 hover:text-primary-500 cursor-pointer flex items-center gap-1"
-                >
+                <button onClick={() => startEdit(o)} className="text-xs text-foreground-400 hover:text-primary-500 cursor-pointer flex items-center gap-1">
                   <i className="ri-edit-line"></i>
                   Modifier
                 </button>
@@ -954,9 +1003,7 @@ function NotesTab({ orders, onNoteSaved }: { orders: OrderHeader[]; onNoteSaved:
                 maxLength={500}
               ></textarea>
             ) : (
-              <p className="text-sm text-foreground-700 leading-relaxed bg-background-100 rounded-md p-3">
-                {o.admin_notes}
-              </p>
+              <p className="text-sm text-foreground-700 leading-relaxed bg-background-100 rounded-md p-3">{o.notevendeur}</p>
             )}
           </div>
         ))

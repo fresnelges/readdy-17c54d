@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { icon: 'ri-apps-2-line', label: 'App Builder', path: '/superadmin/apps' },
   { icon: 'ri-home-8-line', label: "Page d'accueil", path: '/superadmin/homepage' },
   { icon: 'ri-terminal-line', label: 'Logs Système', path: '/superadmin/logs' },
+  { icon: 'ri-database-2-line', label: 'Stockage', path: '/superadmin/storage' },
   { icon: 'ri-shield-keyhole-line', label: 'Paramètres IA', path: '/superadmin/settings' },
 ];
 
@@ -50,36 +51,45 @@ export default function SuperAdminLayout() {
         />
       )}
 
-      <aside className={`fixed top-0 left-0 bottom-0 z-50 w-64 bg-background-50 border-r border-background-200/70 transition-transform duration-200 lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:fixed`}>
+      <aside className={`fixed top-0 left-0 z-50 h-[100dvh] w-72 max-w-[85vw] bg-background-50 border-r border-background-200/70 transition-transform duration-200 lg:w-64 lg:max-w-none lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           {/* Logo - fixed at top */}
           <div className="flex-shrink-0 p-5 pb-3">
-            <Link to="/superadmin" className="flex items-center gap-2 mb-6">
-              {brand.logo ? (
-                <div className="w-8 h-8 rounded-lg overflow-hidden bg-background-50 border border-background-200/50 flex items-center justify-center flex-shrink-0">
-                  <img
-                    src={brand.logo}
-                    alt={brand.name}
-                    className="w-full h-full object-contain p-1"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="w-8 h-8 rounded-lg bg-foreground-950 flex items-center justify-center flex-shrink-0">
-                  <span className="text-background-50 font-bold text-sm font-heading">
-                    {brand.name.charAt(0).toUpperCase()}
+            <div className="flex items-center justify-between gap-2 mb-6">
+              <Link to="/superadmin" className="flex items-center gap-2 min-w-0">
+                {brand.logo ? (
+                  <div className="w-8 h-8 rounded-lg overflow-hidden bg-background-50 border border-background-200/50 flex items-center justify-center flex-shrink-0">
+                    <img
+                      src={brand.logo}
+                      alt={brand.name}
+                      className="w-full h-full object-contain p-1"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-foreground-950 flex items-center justify-center flex-shrink-0">
+                    <span className="text-background-50 font-bold text-sm font-heading">
+                      {brand.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-lg font-bold font-heading text-foreground-950">
+                    {brand.name}
                   </span>
+                  <span className="block text-[10px] text-foreground-400 -mt-0.5">SuperAdmin</span>
                 </div>
-              )}
-              <div>
-                <span className="text-lg font-bold font-heading text-foreground-950">
-                  {brand.name}
-                </span>
-                <span className="block text-[10px] text-foreground-400 -mt-0.5">SuperAdmin</span>
-              </div>
-            </Link>
+              </Link>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="lg:hidden w-8 h-8 flex items-center justify-center rounded-md text-foreground-500 hover:bg-background-100 hover:text-foreground-800 transition-colors cursor-pointer shrink-0"
+                title="Fermer le menu"
+              >
+                <i className="ri-close-line text-xl"></i>
+              </button>
+            </div>
           </div>
 
           {/* Navigation - scrollable */}
@@ -90,14 +100,14 @@ export default function SuperAdminLayout() {
                   key={item.path}
                   to={item.path}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                     isActive(item.path)
-                      ? 'bg-foreground-100 text-foreground-900'
-                      : 'text-foreground-600 hover:bg-background-100 hover:text-foreground-900'
+                      ? 'bg-foreground-100 text-foreground-900 font-semibold'
+                      : 'text-foreground-700 hover:bg-background-100 hover:text-foreground-950'
                   }`}
                 >
                   <i className={`${item.icon} text-lg w-5 h-5 flex items-center justify-center flex-shrink-0`}></i>
-                  <span className="truncate">{item.label}</span>
+                  <span className="leading-snug">{item.label}</span>
                 </Link>
               ))}
             </div>

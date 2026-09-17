@@ -2,7 +2,9 @@ import { useTenant } from '@/hooks/useTenant';
 import { Link, useLocation } from 'react-router-dom';
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useCart } from '@/hooks/useCart';
 import { getMainSiteUrl } from '@/lib/domain';
+import StoreSearchBar from '@/components/feature/StoreSearchBar';
 
 // ── Default page definitions ──────────────────────────────────
 const DEFAULT_PAGES = [
@@ -76,7 +78,9 @@ export default function TenantNavbar() {
   const { tenant, theme } = useTenant();
   const location = useLocation();
   const { user, logout } = useAuth(); // Get logged-in user (if any)
+  const { count: cartCount } = useCart();
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   // ── Close user menu on outside click ────────────────────────
@@ -219,6 +223,20 @@ export default function TenantNavbar() {
 
             {/* Navigation links + User menu */}
             <div className="flex items-center gap-0.5 flex-wrap">
+              {/* Search — desktop */}
+              <div className="hidden lg:block w-44 mr-1">
+                <StoreSearchBar />
+              </div>
+
+              {/* Search toggle — mobile */}
+              <button
+                onClick={() => setSearchOpen((v) => !v)}
+                className="lg:hidden flex items-center justify-center w-9 h-9 rounded-full text-foreground-600 hover:text-foreground-900 hover:bg-background-100 transition-colors cursor-pointer"
+                aria-label="Rechercher"
+              >
+                <i className="ri-search-line text-base"></i>
+              </button>
+
               {allLinks.map((link) => (
                 link.isExternal ? (
                   <a
@@ -247,6 +265,20 @@ export default function TenantNavbar() {
                   </Link>
                 )
               ))}
+
+              {/* ── Cart button ── */}
+              <Link
+                to="/cart"
+                className="relative flex items-center justify-center w-9 h-9 rounded-full text-foreground-600 hover:text-foreground-900 hover:bg-background-100 transition-colors cursor-pointer no-underline ml-1"
+                aria-label="Panier"
+              >
+                <i className="ri-shopping-cart-line text-lg"></i>
+                {cartCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-primary-500 text-background-50 text-[10px] font-bold flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
+              </Link>
 
               {/* ── User account button (for Zifek client users) ── */}
               <div className="relative ml-2" ref={userMenuRef}>
@@ -314,6 +346,13 @@ export default function TenantNavbar() {
               </div>
             </div>
           </div>
+
+          {/* Mobile search row */}
+          {searchOpen && (
+            <div className="lg:hidden pb-3">
+              <StoreSearchBar onSubmitted={() => setSearchOpen(false)} />
+            </div>
+          )}
         </div>
       </nav>
     </>

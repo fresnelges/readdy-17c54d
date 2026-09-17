@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { getCommerceId } from '@/lib/ownership';
 import { uploadMediaFile } from '@/hooks/useUpload';
 
 interface PartnerItem {
@@ -62,7 +63,7 @@ export default function PartenairesPage() {
       let query = supabase
         .from('partenaires')
         .select('*')
-        .eq('owner', user!.id)
+        .eq('idcommerce', getCommerceId(user))
         .order('created_at', { ascending: false });
 
       if (search) {
@@ -113,6 +114,7 @@ export default function PartenairesPage() {
         prix: 0,
         product_image: formData.product_image || '',
         owner: user.id,
+        idcommerce: getCommerceId(user),
         pays: user.Pays || null,
         ville: user.Ville || null,
         slug: formData.titre.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),

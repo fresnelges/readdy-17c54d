@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useBrand } from '@/hooks/useBrand';
@@ -11,6 +11,17 @@ interface AppLink {
   icon: string;
 }
 
+interface Notification {
+  id: number;
+  user_id: number;
+  sender_id: number;
+  publication_id: number;
+  type: string;
+  message: string;
+  is_read: number;
+  created_at: string;
+}
+
 const BASE_NAV_ITEMS = [
   { icon: 'ri-dashboard-line', label: 'Tableau de bord', path: '/dashboard' },
   { icon: 'ri-shopping-bag-3-line', label: 'Produits', path: '/dashboard/products' },
@@ -19,8 +30,12 @@ const BASE_NAV_ITEMS = [
   { icon: 'ri-file-list-3-line', label: 'Commandes', path: '/dashboard/orders' },
   { icon: 'ri-user-line', label: 'Clients', path: '/dashboard/customers' },
   { icon: 'ri-bank-card-line', label: 'Paiements', path: '/dashboard/payments' },
+  { icon: 'ri-wallet-3-line', label: 'Portefeuille', path: '/dashboard/wallet' },
   { icon: 'ri-store-2-line', label: 'Ma boutique', path: '/dashboard/store' },
+  { icon: 'ri-edit-line', label: 'Contenu du site', path: '/dashboard/site-content' },
   { icon: 'ri-image-line', label: 'Médias', path: '/dashboard/media' },
+  { icon: 'ri-file-text-line', label: 'Documents', path: '/dashboard/documents' },
+  { icon: 'ri-database-2-line', label: 'Stockage', path: '/dashboard/storage' },
   { icon: 'ri-line-chart-line', label: 'Statistiques', path: '/dashboard/analytics' },
   { icon: 'ri-apps-2-line', label: 'AppStore', path: '/dashboard/appstore' },
   { icon: 'ri-toggle-line', label: 'Mes Apps', path: '/dashboard/apps' },
@@ -61,18 +76,86 @@ function cleanDisplayUrl(url: string): string {
   return url.replace(/^https?:\/\//, '');
 }
 
+const NOTIF_TYPE_META: Record<string, { icon: string; className: string }> = {
+  order: { icon: 'ri-shopping-cart-2-line', className: 'text-primary-600 bg-primary-50' },
+  payment: { icon: 'ri-bank-card-line', className: 'text-primary-600 bg-primary-50' },
+  like: { icon: 'ri-heart-3-line', className: 'text-accent-600 bg-accent-50' },
+  comment: { icon: 'ri-chat-3-line', className: 'text-secondary-600 bg-secondary-50' },
+  follow: { icon: 'ri-user-add-line', className: 'text-accent-600 bg-accent-50' },
+  message: { icon: 'ri-message-3-line', className: 'text-primary-600 bg-primary-50' },
+  mention: { icon: 'ri-at-line', className: 'text-secondary-600 bg-secondary-50' },
+  system: { icon: 'ri-information-line', className: 'text-foreground-600 bg-background-100' },
+};
+
+function notifMeta(type: string) {
+  return NOTIF_TYPE_META[type] || { icon: 'ri-notification-3-line', className: 'text-foreground-600 bg-background-100' };
+}
+
+function timeAgo(dateStr: string): string {
+  const date = new Date(dateStr);
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return "à l'instant";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `il y a ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `il y a ${hours} h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `il y a ${days} j`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `il y a ${weeks} sem`;
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
   const { brand } = useBrand();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [siteUrl, setSiteUrl] = useState<string>('');
-  const [copied, setCopied] = useState(false);
   const [isCustomDomain, setIsCustomDomain] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewDevice, setPreviewDevice] = useState<PreviewDevice>('desktop');
   const [installedAppPages, setInstalledAppPages] = useState<Set<string>>(new Set());
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const [badgeBlink, setBadgeBlink] = useState(false);
+  const prevUnreadRef = useRef(0);
+
+  const refreshInstalledApps = useCallback(() => {
+    if (!user) return;
+    supabase
+      .from('appvendeur')
+      .select('nompage')
+      .eq('idcommerce', user.id)
+      .eq('status', 1)
+      .then(({ data }) => {
+        const pages = new Set((data || []).map((r: { nompage: string }) => r.nompage));
+        setInstalledAppPages(pages);
+      })
+      .catch(() => {});
+  }, [user]);
+
+  const fetchNotifications = useCallback(() => {
+    if (!user) return;
+    setNotificationsLoading(true);
+    supabase
+      .from('notifications')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(30)
+      .then(({ data, error }) => {
+        if (!error) setNotifications((data || []) as Notification[]);
+      })
+      .catch(() => {})
+      .finally(() => setNotificationsLoading(false));
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -98,32 +181,79 @@ export default function DashboardLayout() {
       })
       .catch(() => {});
 
-    // Check which installable apps are active
-    supabase
-      .from('appvendeur')
-      .select('nompage')
-      .eq('idcommerce', user.id)
-      .eq('status', 1)
-      .then(({ data }) => {
-        const pages = new Set((data || []).map((r: { nompage: string }) => r.nompage));
-        setInstalledAppPages(pages);
-      })
-      .catch(() => {});
-  }, [user, navigate, location.pathname]);
+    refreshInstalledApps();
+  }, [user, navigate, location.pathname, refreshInstalledApps]);
+
+  // Re-synchronise le menu latéral quand le statut d'une app change (toggle dans /dashboard/apps)
+  useEffect(() => {
+    const handler = () => refreshInstalledApps();
+    window.addEventListener('app-status-changed', handler);
+    return () => window.removeEventListener('app-status-changed', handler);
+  }, [refreshInstalledApps]);
+
+  // Ferme les menus au clic en dehors
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (accountMenuRef.current && !accountMenuRef.current.contains(target)) {
+        setAccountMenuOpen(false);
+      }
+      if (notificationsRef.current && !notificationsRef.current.contains(target)) {
+        setNotificationsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Ferme les menus à chaque changement de page
+  useEffect(() => {
+    setAccountMenuOpen(false);
+    setNotificationsOpen(false);
+  }, [location.pathname]);
+
+  // Charge les notifications quand l'utilisateur est disponible
+  useEffect(() => {
+    if (user) fetchNotifications();
+  }, [user, fetchNotifications]);
 
 
-
-  const copySiteUrl = useCallback(() => {
-    if (!siteUrl) return;
-    navigator.clipboard.writeText(siteUrl).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
-  }, [siteUrl]);
 
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  const unreadCount = notifications.filter((n) => n.is_read === 0).length;
+
+  // Fait clignoter doucement le badge quand le nombre de non-lus augmente
+  useEffect(() => {
+    if (unreadCount > prevUnreadRef.current) {
+      setBadgeBlink(true);
+      const timer = setTimeout(() => setBadgeBlink(false), 2000);
+      prevUnreadRef.current = unreadCount;
+      return () => clearTimeout(timer);
+    }
+    prevUnreadRef.current = unreadCount;
+  }, [unreadCount]);
+
+  const markNotificationAsRead = (id: number) => {
+    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, is_read: 1 } : n)));
+    supabase
+      .from('notifications')
+      .update({ is_read: 1 })
+      .eq('id', id)
+      .then(() => {});
+  };
+
+  const markAllNotificationsAsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, is_read: 1 })));
+    supabase
+      .from('notifications')
+      .update({ is_read: 1 })
+      .eq('user_id', user?.id)
+      .eq('is_read', 0)
+      .then(() => {});
   };
 
   if (!user) {
@@ -161,6 +291,13 @@ export default function DashboardLayout() {
     return result;
   })();
 
+  // Filtre les éléments de navigation selon la recherche
+  const filteredNavItems = searchQuery.trim()
+    ? navItems.filter((item) =>
+        item.label.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      )
+    : navItems;
+
   return (
     <div className="min-h-screen bg-background-100 flex">
       {mobileMenuOpen && (
@@ -170,129 +307,284 @@ export default function DashboardLayout() {
         />
       )}
 
-      <aside className={`fixed top-0 left-0 bottom-0 z-50 w-64 bg-background-50 border-r border-background-200/70 transition-transform duration-200 lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'} lg:fixed`}>
+      <aside className={`fixed top-0 left-0 z-50 h-[100dvh] w-72 max-w-[85vw] bg-background-50 border-r border-background-200/70 transition-transform duration-200 lg:w-64 lg:max-w-none lg:translate-x-0 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="flex flex-col h-full">
           {/* Logo - fixed at top */}
-          <div className="flex-shrink-0 p-5 pb-3">
-            <Link to="/" className="flex items-center gap-2 mb-6">
-              {brand.logo ? (
-                <div className="w-8 h-8 rounded-lg overflow-hidden bg-background-50 border border-background-200/50 flex items-center justify-center flex-shrink-0">
-                  <img
-                    src={brand.logo}
-                    alt={brand.name}
-                    className="w-full h-full object-contain p-1"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center flex-shrink-0">
-                  <span className="text-white font-bold text-sm font-heading">
-                    {brand.name.charAt(0).toUpperCase()}
-                  </span>
-                </div>
+          <div className="flex-shrink-0 px-5 pt-4 pb-2">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <Link to="/" className="flex items-center gap-2 min-w-0">
+                {brand.logo ? (
+                  <div className="w-8 h-8 rounded-lg overflow-hidden bg-background-50 border border-background-200/50 flex items-center justify-center flex-shrink-0">
+                    <img
+                      src={brand.logo}
+                      alt={brand.name}
+                      className="w-full h-full object-contain p-1"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 rounded-lg bg-primary-500 flex items-center justify-center flex-shrink-0">
+                    <span className="text-white font-bold text-sm font-heading">
+                      {brand.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                )}
+                <span className="text-lg font-bold font-heading text-foreground-950 truncate">
+                  {brand.name}
+                </span>
+              </Link>
+              <button
+                onClick={() => setMobileMenuOpen(false)}
+                className="lg:hidden w-8 h-8 flex items-center justify-center rounded-md text-foreground-500 hover:bg-background-100 hover:text-foreground-800 transition-colors cursor-pointer shrink-0"
+                title="Fermer le menu"
+              >
+                <i className="ri-close-line text-xl"></i>
+              </button>
+            </div>
+          </div>
+
+          {/* Recherche de page */}
+          <div className="flex-shrink-0 px-3 pb-2">
+            <div className="relative">
+              <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-foreground-400 text-sm pointer-events-none"></i>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher une page..."
+                className="w-full pl-9 pr-8 py-2 rounded-md text-sm bg-background-100 border border-background-200/70 text-foreground-900 placeholder:text-foreground-400 focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-300 transition-colors"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded text-foreground-400 hover:text-foreground-700 transition-colors cursor-pointer"
+                  title="Effacer"
+                >
+                  <i className="ri-close-circle-fill text-sm"></i>
+                </button>
               )}
-              <span className="text-lg font-bold font-heading text-foreground-950">
-                {brand.name}
-              </span>
-            </Link>
+            </div>
           </div>
 
           {/* Navigation - scrollable */}
           <nav className="sidebar-scroll flex-1 overflow-y-auto px-3 pb-4 overscroll-contain" style={{ scrollbarWidth: 'thin', scrollbarColor: 'oklch(var(--foreground-200) / 0.5) transparent' }}>
             <div className="space-y-0.5">
-              {navItems.map((item) => (
+              {filteredNavItems.map((item) => (
                 <Link
                   key={item.path}
                   to={item.path}
                   onClick={() => setMobileMenuOpen(false)}
-                  className={`w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                  className={`relative w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors cursor-pointer ${
                     isActive(item.path)
-                      ? 'bg-primary-50 text-primary-700'
-                      : 'text-foreground-600 hover:bg-background-100 hover:text-foreground-900'
+                      ? 'bg-primary-50 text-primary-700 font-semibold'
+                      : 'text-foreground-700 hover:bg-background-100 hover:text-foreground-950'
                   }`}
                 >
+                  {isActive(item.path) && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-primary-500"></span>
+                  )}
                   <i className={`${item.icon} text-lg w-5 h-5 flex items-center justify-center flex-shrink-0`}></i>
-                  <span className="truncate">{item.label}</span>
+                  <span className="leading-snug">{item.label}</span>
                 </Link>
               ))}
+              {filteredNavItems.length === 0 && (
+                <div className="px-3 py-8 text-center">
+                  <i className="ri-search-eye-line text-2xl text-foreground-300"></i>
+                  <p className="mt-2 text-sm text-foreground-500">Aucune page trouvée</p>
+                </div>
+              )}
             </div>
           </nav>
 
           {/* User section - fixed at bottom */}
-          <div className="flex-shrink-0 p-5 pt-3 border-t border-background-200/70">
-            {/* Site URL */}
-            {siteUrl && (
-              <div className="mb-4 p-3 bg-background-100 rounded-lg">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-foreground-400 flex items-center gap-1">
-                    <i className={isCustomDomain ? 'ri-link-m' : 'ri-global-line'}></i>
-                    {isCustomDomain ? 'Domaine perso' : 'Sous-domaine'}
-                  </span>
-                  <button
-                    onClick={copySiteUrl}
-                    className="w-6 h-6 flex items-center justify-center rounded hover:bg-background-200/70 transition-colors cursor-pointer"
-                    title="Copier l'URL"
-                  >
-                    <i className={`text-xs ${copied ? 'ri-check-line text-accent-500' : 'ri-file-copy-line text-foreground-400'}`}></i>
-                  </button>
-                </div>
-                <a
-                  href={siteUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-foreground-600 truncate block hover:text-primary-500 transition-colors cursor-pointer"
-                  title={siteUrl}
-                >
-                  {cleanDisplayUrl(siteUrl)}
-                </a>
-              </div>
-            )}
-
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-full bg-accent-100 flex items-center justify-center flex-shrink-0">
-                <span className="text-accent-700 font-bold text-xs">{user.name.charAt(0)}</span>
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold text-foreground-950 truncate">{user.name}</div>
-                <div className="text-xs text-foreground-500 truncate">{user.nomcommerce}</div>
-              </div>
-            </div>
+          <div className="flex-shrink-0 p-3 pt-2 border-t border-background-200/70 flex justify-center">
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground-500 hover:text-foreground-800 hover:bg-background-100 transition-colors cursor-pointer"
+              className="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-foreground-500 hover:text-foreground-800 hover:bg-background-100 transition-colors cursor-pointer whitespace-nowrap"
+              title="Déconnexion"
             >
-              <i className="ri-logout-box-r-line"></i>
-              Déconnexion
+              <i className="ri-logout-box-r-line text-lg"></i>
+              <span>Déconnexion</span>
             </button>
           </div>
         </div>
       </aside>
 
-      <div className="flex-1 lg:ml-64">
+      <div className="flex-1 min-w-0 lg:ml-64">
         <header className="sticky top-0 z-30 bg-background-50/95 backdrop-blur-md border-b border-background-200/70">
           <div className="flex items-center justify-between h-14 md:h-16 px-4 md:px-6">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               <button
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="lg:hidden w-9 h-9 flex items-center justify-center rounded-md border border-background-200/70 cursor-pointer"
+                className="lg:hidden w-9 h-9 flex items-center justify-center rounded-md border border-background-200/70 cursor-pointer shrink-0"
               >
                 <i className="ri-menu-line text-lg text-foreground-700"></i>
               </button>
-              <h1 className="text-lg font-bold font-heading text-foreground-950">
+              <h1 className="text-base sm:text-lg font-bold font-heading text-foreground-950 truncate">
                 {user.nomcommerce}
               </h1>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-background-100 transition-colors cursor-pointer">
-                <i className="ri-notification-3-line text-lg text-foreground-600"></i>
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary-500"></span>
-              </button>
+            <div className="flex items-center gap-1 sm:gap-3 shrink-0">
+              <div className="relative pr-3 border-r border-background-200/70" ref={accountMenuRef}>
+                <button
+                  onClick={() => setAccountMenuOpen((v) => !v)}
+                  className="group relative flex items-center gap-2.5 rounded-md px-1 py-1 -my-1 hover:bg-background-100 transition-colors cursor-pointer"
+                  title="Mon compte"
+                >
+                  <div className="relative flex-shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-accent-100 flex items-center justify-center flex-shrink-0">
+                      <span className="text-accent-700 font-bold text-xs">{user.name.charAt(0)}</span>
+                    </div>
+                    {unreadCount > 0 && (
+                      <span className={`absolute -top-1 -right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-primary-500 text-white text-[10px] font-semibold leading-none ring-2 ring-background-50 ${badgeBlink ? 'animate-badge-blink' : ''}`}>
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0 hidden md:block">
+                    <div className="text-sm font-semibold text-foreground-950 truncate leading-tight text-left">{user.name}</div>
+                    <div className="flex items-center gap-1 text-xs text-foreground-500 truncate max-w-[160px]">
+                      <i className={isCustomDomain ? 'ri-link-m' : 'ri-global-line'}></i>
+                      <span className="truncate">{cleanDisplayUrl(siteUrl)}</span>
+                    </div>
+                  </div>
+                  <i className={`ri-arrow-down-s-line text-sm text-foreground-400 transition-transform hidden md:block ${accountMenuOpen ? 'rotate-180' : ''}`}></i>
+
+                  {/* Infobulle affichant le nom au survol quand l'espace est réduit */}
+                  <span className="pointer-events-none absolute left-1/2 top-[calc(100%+6px)] z-50 -translate-x-1/2 whitespace-nowrap rounded-md bg-foreground-900 px-2.5 py-1.5 text-xs font-medium text-background-50 opacity-0 scale-95 transition-all duration-150 group-hover:opacity-100 group-hover:scale-100 hidden sm:block md:hidden">
+                    {user.name}
+                    <span className="absolute left-1/2 -top-1 h-2 w-2 -translate-x-1/2 rotate-45 bg-foreground-900"></span>
+                  </span>
+                </button>
+
+                {accountMenuOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-background-50 border border-background-200/70 rounded-lg overflow-hidden z-50">
+                    <div className="px-4 py-3 border-b border-background-200/70 bg-background-100/50">
+                      <div className="text-sm font-semibold text-foreground-950 truncate">{user.name}</div>
+                      <div className="text-xs text-foreground-500 truncate mt-0.5">{user.email}</div>
+                    </div>
+                    <div className="p-1">
+                      <Link
+                        to="/dashboard/store"
+                        onClick={() => setAccountMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-foreground-700 hover:bg-background-100 hover:text-foreground-950 transition-colors cursor-pointer"
+                      >
+                        <i className="ri-user-3-line text-base w-5 h-5 flex items-center justify-center"></i>
+                        <span>Mon profil</span>
+                      </Link>
+                      <Link
+                        to="/dashboard/settings"
+                        onClick={() => setAccountMenuOpen(false)}
+                        className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-foreground-700 hover:bg-background-100 hover:text-foreground-950 transition-colors cursor-pointer"
+                      >
+                        <i className="ri-settings-3-line text-base w-5 h-5 flex items-center justify-center"></i>
+                        <span>Paramètres</span>
+                      </Link>
+                    </div>
+                    <div className="border-t border-background-200/70 p-1">
+                      <button
+                        onClick={handleLogout}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-foreground-700 hover:bg-background-100 hover:text-foreground-950 transition-colors cursor-pointer"
+                      >
+                        <i className="ri-logout-box-r-line text-base w-5 h-5 flex items-center justify-center"></i>
+                        <span>Déconnexion</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="relative" ref={notificationsRef}>
+                <button
+                  onClick={() => {
+                    setNotificationsOpen((v) => !v);
+                    setAccountMenuOpen(false);
+                  }}
+                  className="relative w-9 h-9 flex items-center justify-center rounded-full hover:bg-background-100 transition-colors cursor-pointer"
+                  title="Notifications"
+                >
+                  <i className="ri-notification-3-line text-lg text-foreground-600"></i>
+                  {unreadCount > 0 && (
+                    <span className={`absolute top-1 right-1 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-primary-500 text-white text-[10px] font-semibold leading-none ${badgeBlink ? 'animate-badge-blink' : ''}`}>
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {notificationsOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-background-50 border border-background-200/70 rounded-lg overflow-hidden z-50">
+                    <div className="flex items-center justify-between px-4 h-12 border-b border-background-200/70">
+                      <span className="text-sm font-semibold text-foreground-950">Notifications</span>
+                      {unreadCount > 0 && (
+                        <button
+                          onClick={markAllNotificationsAsRead}
+                          className="flex items-center gap-1 text-xs text-primary-600 hover:text-primary-700 font-medium transition-colors cursor-pointer whitespace-nowrap"
+                        >
+                          <i className="ri-check-double-line"></i>
+                          <span>Tout marquer comme lu</span>
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="max-h-[420px] overflow-y-auto">
+                      {notificationsLoading ? (
+                        <div className="flex items-center justify-center py-12">
+                          <i className="ri-loader-4-line animate-spin text-xl text-foreground-400"></i>
+                        </div>
+                      ) : notifications.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+                          <div className="w-12 h-12 rounded-full bg-background-100 flex items-center justify-center">
+                            <i className="ri-notification-off-line text-xl text-foreground-400"></i>
+                          </div>
+                          <p className="mt-3 text-sm font-medium text-foreground-700">Aucune notification</p>
+                          <p className="mt-1 text-xs text-foreground-500">Vous serez informé ici des nouveautés et alertes.</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-background-200/70">
+                          {notifications.map((n) => {
+                            const meta = notifMeta(n.type);
+                            return (
+                              <button
+                                key={n.id}
+                                onClick={() => markNotificationAsRead(n.id)}
+                                className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors cursor-pointer ${
+                                  n.is_read === 0 ? 'bg-primary-50/50 hover:bg-primary-50' : 'hover:bg-background-100'
+                                }`}
+                              >
+                                <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${meta.className}`}>
+                                  <i className={`${meta.icon} text-base`}></i>
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm text-foreground-800 leading-snug break-words">{n.message}</p>
+                                  <p className="mt-1 text-xs text-foreground-400">{timeAgo(n.created_at)}</p>
+                                </div>
+                                {n.is_read === 0 && (
+                                  <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0 mt-1.5"></span>
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-background-200/70 px-4 py-2 flex justify-center">
+                      <button
+                        onClick={fetchNotifications}
+                        className="flex items-center gap-1.5 text-xs text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer"
+                      >
+                        <i className="ri-refresh-line"></i>
+                        <span>Actualiser</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 onClick={() => setPreviewOpen(!previewOpen)}
-                className={`hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-colors cursor-pointer ${
+                className={`flex items-center gap-1.5 px-2 py-1.5 md:px-3 rounded-full text-sm whitespace-nowrap transition-colors cursor-pointer ${
                   previewOpen
                     ? 'bg-primary-50 text-primary-700'
                     : 'text-foreground-500 hover:text-foreground-700'
@@ -300,22 +592,22 @@ export default function DashboardLayout() {
                 title="Prévisualiser le site"
               >
                 <i className={previewOpen ? 'ri-eye-off-line' : 'ri-eye-line'}></i>
-                <span>Prévisualiser</span>
+                <span className="hidden md:inline">Prévisualiser</span>
               </button>
               <a
                 href={siteUrl || '#'}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer whitespace-nowrap"
+                className="flex items-center gap-1.5 px-2 py-1.5 md:px-3 rounded-full text-sm text-foreground-500 hover:text-foreground-700 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <i className="ri-global-line"></i>
-                <span>Voir le site</span>
+                <span className="hidden md:inline">Voir le site</span>
               </a>
             </div>
           </div>
         </header>
 
-        <main>
+        <main className="min-w-0">
           <Outlet />
         </main>
 

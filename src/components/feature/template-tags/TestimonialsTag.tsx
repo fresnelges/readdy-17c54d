@@ -23,7 +23,7 @@ export default function TestimonialsTag() {
     let query = supabase.from('temoignage').select('*');
 
     if (isTenant && tenant) {
-      query = query.eq('owner', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
 
     query

@@ -6,6 +6,7 @@ import { validateUsername } from '@/lib/username';
 
 export interface ZifekUser {
   id: number;
+  idcommerce: number;
   user_name: string;
   email: string;
   name: string;
@@ -86,6 +87,7 @@ function getStoredUser(): ZifekUser | null {
 export function mapZifekUser(row: Record<string, unknown>): ZifekUser {
   return {
     id: row.id as number,
+    idcommerce: (row.idcommerce as number) || 0,
     user_name: row.user_name as string,
     email: row.email as string,
     name: row.name as string,

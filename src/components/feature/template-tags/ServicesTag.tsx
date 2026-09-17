@@ -27,7 +27,7 @@ export default function ServicesTag() {
     let query = supabase.from('nospartenairesservices').select('*');
 
     if (isTenant && tenant) {
-      query = query.eq('owner', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
 
     query

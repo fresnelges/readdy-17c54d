@@ -4,6 +4,7 @@ import { I18nextProvider } from "react-i18next";
 import i18n from "./i18n";
 import { AuthProvider } from "./hooks/useAuth";
 import { TenantProvider, useTenant } from "./hooks/useTenant";
+import { CartProvider } from "./hooks/useCart";
 import { BrandProvider } from "./hooks/useBrand";
 import { HomepageContentProvider } from "./hooks/useHomepageContent";
 import TenantStore from "./pages/tenant/TenantStore";
@@ -45,7 +46,9 @@ function App() {
     <I18nextProvider i18n={i18n}>
       <AuthProvider>
         <TenantProvider>
-          <AppShell />
+          <CartProvider>
+            <AppShell />
+          </CartProvider>
         </TenantProvider>
       </AuthProvider>
     </I18nextProvider>

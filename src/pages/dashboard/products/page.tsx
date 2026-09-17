@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, isSuperAdmin } from '@/hooks/useAuth';
+import { getCommerceId } from '@/lib/ownership';
 import { uploadMediaFile, MEDIA_LIMITS } from '@/hooks/useUpload';
 import IconPicker from '@/components/feature/IconPicker';
 import ImagePicker from '@/components/feature/ImagePicker';
@@ -129,6 +130,10 @@ export default function ProductsPage() {
         .select('*, product_categories(id, name)')
         .order('created_at', { ascending: false });
 
+      if (user && !isSuperAdmin(user.typecompte)) {
+        query = query.eq('idcommerce', getCommerceId(user));
+      }
+
       if (search) {
         query = query.ilike('name', `%${search}%`);
       }
@@ -147,7 +152,7 @@ export default function ProductsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, categoryFilter]);
+  }, [search, statusFilter, categoryFilter, user]);
 
   useEffect(() => {
     fetchProducts();

@@ -25,7 +25,9 @@ import OrdersPage from "../pages/dashboard/orders/page";
 import NewOrderPage from "../pages/dashboard/orders/new/page";
 import CustomersPage from "../pages/dashboard/customers/page";
 import PaymentsPage from "../pages/dashboard/payments/page";
+import WalletPage from "../pages/dashboard/wallet/page";
 import StorePage from "../pages/dashboard/store/page";
+import SiteContentPage from "../pages/dashboard/site-content/page";
 import MediaPage from "../pages/dashboard/media/page";
 import AnalyticsPage from "../pages/dashboard/analytics/page";
 import SettingsPage from "../pages/dashboard/settings/page";
@@ -45,6 +47,7 @@ import FideliteRecompensesPage from "../pages/dashboard/apps/fidelite-recompense
 import MonAssistantPage from "../pages/dashboard/apps/mon-assistant/page";
 import PayPalPage from "../pages/dashboard/apps/paypal/page";
 import FileManagerPage from "../pages/dashboard/apps/file-manager/page";
+import DocumentsPage from "../pages/dashboard/apps/documents/page";
 import FormsAppPage from "../pages/dashboard/apps/forms/page";
 import FormBuilderPage from "../pages/dashboard/apps/forms/new/page";
 import FormResponsesPage from "../pages/dashboard/apps/forms/responses/page";
@@ -54,6 +57,8 @@ import GestionProPage from "../pages/dashboard/apps/gestionpro/page";
 import GestionProDetailPage from "../pages/dashboard/apps/gestionpro/detail/page";
 import ZCallPage from "../pages/dashboard/apps/zcall/page";
 import FormationAppPage from "../pages/dashboard/apps/formation/page";
+import FormationDetailPage from "../pages/dashboard/apps/formation/detail/page";
+import DashboardStoragePage from "../pages/dashboard/storage/page";
 import DynamicAppPage from "../pages/dashboard/app/dynamic/page";
 import SuperAdminLayout from "../components/feature/SuperAdminLayout";
 import SuperAdminDashboard from "../pages/superadmin/page";
@@ -65,6 +70,7 @@ import AppBuilderPage from "../pages/superadmin/apps/builder/page";
 import SuperAdminLogs from "../pages/superadmin/logs/page";
 import SuperAdminSettings from "../pages/superadmin/settings/page";
 import SuperAdminHomepage from "../pages/superadmin/homepage/page";
+import SuperAdminStorage from "../pages/superadmin/storage/page";
 import ProduitsPublic from "../pages/public/ProduitsPage";
 import ServicesPublic from "../pages/public/ServicesPage";
 import PartenairesPublic from "../pages/public/PartenairesPage";
@@ -142,6 +148,10 @@ const routes: RouteObject[] = [
     element: <ZCallRoomPage />,
   },
   {
+    path: "/zcall/:slug",
+    element: <ZCallRoomPage />,
+  },
+  {
     path: "/lookbook/:outfitId",
     element: <LookbookPage />,
   },
@@ -168,11 +178,14 @@ const routes: RouteObject[] = [
       { path: "customers/:clientId", element: <CustomerDetailPage /> },
       { path: "customers", element: <CustomersPage /> },
       { path: "payments", element: <PaymentsPage /> },
+      { path: "wallet", element: <WalletPage /> },
       { path: "store", element: <StorePage /> },
+      { path: "site-content", element: <SiteContentPage /> },
       { path: "media", element: <MediaPage /> },
       { path: "analytics", element: <AnalyticsPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "appstore", element: <AppStorePage /> },
+      { path: "storage", element: <DashboardStoragePage /> },
       { path: "themestore", element: <ThemeStorePage /> },
       { path: "apps", element: <AppsManagementPage /> },
       { path: "analytics-advanced", element: <AnalyticsAdvancedPage /> },
@@ -188,6 +201,7 @@ const routes: RouteObject[] = [
       { path: "mon-assistant", element: <MonAssistantPage /> },
       { path: "paypal", element: <PayPalPage /> },
       { path: "file-manager", element: <FileManagerPage /> },
+      { path: "documents", element: <DocumentsPage /> },
       { path: "forms", element: <FormsAppPage /> },
       { path: "forms/new", element: <FormBuilderPage /> },
       { path: "forms/:id/edit", element: <FormBuilderPage /> },
@@ -198,6 +212,7 @@ const routes: RouteObject[] = [
       { path: "gestionpro/:id", element: <GestionProDetailPage /> },
       { path: "zcall", element: <ZCallPage /> },
       { path: "formation", element: <FormationAppPage /> },
+      { path: "formation/:id", element: <FormationDetailPage /> },
       { path: "*", element: <DynamicAppPage /> },
     ],
   },
@@ -214,6 +229,7 @@ const routes: RouteObject[] = [
       { path: "logs", element: <SuperAdminLogs /> },
       { path: "settings", element: <SuperAdminSettings /> },
       { path: "homepage", element: <SuperAdminHomepage /> },
+      { path: "storage", element: <SuperAdminStorage /> },
     ],
   },
   {

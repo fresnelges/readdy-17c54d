@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { trackSearch } from '@/lib/facebookPixel';
 
 interface MarketplaceSearchTagProps {
   placeholder?: string;
@@ -7,11 +9,15 @@ interface MarketplaceSearchTagProps {
 export default function MarketplaceSearchTag({ placeholder }: MarketplaceSearchTagProps) {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('');
+  const navigate = useNavigate();
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    // Le rendu dynamique sera géré côté React - ici on fournit juste l'UI
-    window.location.href = `/marketplace?q=${encodeURIComponent(query)}${category ? `&cat=${encodeURIComponent(category)}` : ''}`;
+    // Suivi Meta `Search` + enregistrement dans le compteur du dashboard.
+    trackSearch(query);
+    navigate(
+      `/marketplace?q=${encodeURIComponent(query)}${category ? `&cat=${encodeURIComponent(category)}` : ''}`,
+    );
   };
 
   return (

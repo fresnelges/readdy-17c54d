@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useTenant } from '@/hooks/useTenant';
+import { useSectionContent } from '@/hooks/useSectionContent';
 import { supabase } from '@/lib/supabase';
 import { Link } from 'react-router-dom';
+import { getProductImage } from '@/lib/productMedia';
 
 interface StatsData {
   productCount: number;
@@ -12,6 +14,10 @@ interface StatsData {
 
 export default function TenantHome() {
   const { tenant, theme } = useTenant();
+  const produitsHeading = useSectionContent('home-produits');
+  const servicesHeading = useSectionContent('home-services');
+  const aproposHeading = useSectionContent('home-apropos');
+  const questionHeading = useSectionContent('home-question');
   const [stats, setStats] = useState<StatsData>({ productCount: 0, serviceCount: 0, partnerCount: 0, portfolioCount: 0 });
   const [products, setProducts] = useState<any[]>([]);
   const [services, setServices] = useState<any[]>([]);
@@ -23,12 +29,12 @@ export default function TenantHome() {
     const fetchData = async () => {
       try {
         const [prodRes, svcRes, partRes, portRes, featProdRes, featSvcRes] = await Promise.all([
-          supabase.from('product').select('id', { count: 'exact' }).eq('owner', tenant.id).eq('status', 'active'),
-          supabase.from('nospartenairesservices').select('id', { count: 'exact' }).eq('owner', tenant.id),
-          supabase.from('partenaires').select('id', { count: 'exact' }).eq('owner', tenant.id),
-          supabase.from('portfolio').select('id', { count: 'exact' }).eq('owner', tenant.id),
-          supabase.from('product').select('*').eq('owner', tenant.id).eq('status', 'active').order('created_at', { ascending: false }).limit(4),
-          supabase.from('nospartenairesservices').select('*').eq('owner', tenant.id).order('created_at', { ascending: false }).limit(3),
+          supabase.from('product_items').select('id', { count: 'exact' }).eq('idcommerce', tenant.id).eq('status', 'active'),
+          supabase.from('nospartenairesservices').select('id', { count: 'exact' }).eq('idcommerce', tenant.id),
+          supabase.from('partenaires').select('id', { count: 'exact' }).eq('idcommerce', tenant.id),
+          supabase.from('portfolio').select('id', { count: 'exact' }).eq('idcommerce', tenant.id),
+          supabase.from('product_items').select('*').eq('idcommerce', tenant.id).eq('status', 'active').order('created_at', { ascending: false }).limit(4),
+          supabase.from('nospartenairesservices').select('*').eq('idcommerce', tenant.id).order('created_at', { ascending: false }).limit(3),
         ]);
 
         setStats({
@@ -50,6 +56,7 @@ export default function TenantHome() {
 
   const storeName = theme?.navTitle || tenant?.nomcommerce || tenant?.name || 'Boutique';
   const storeDescription = tenant?.description || tenant?.aboutus || '';
+  const aboutTitle = aproposHeading.title.replace('{storeName}', storeName);
 
   // Hardcoded fallback image URL (product.image from DB takes priority)
   const FALLBACK_PRODUCT_IMG = 'https://readdy.ai/api/search-image?query=Professional%20product%20photography%20with%20clean%20minimalist%20studio%20background%20soft%20lighting%20ecommerce%20style%20modern%20aesthetic%20neutral%20tones&width=600&height=600&seq=tenant-home-prod-fallback&orientation=squarish';
@@ -131,7 +138,7 @@ export default function TenantHome() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl md:text-2xl font-bold font-heading text-foreground-950">
                 <i className="ri-shopping-bag-line mr-2 text-primary-500"></i>
-                Produits
+                {produitsHeading.title}
               </h2>
               <Link to="/products" className="text-sm text-primary-600 hover:text-primary-700 font-medium cursor-pointer no-underline whitespace-nowrap">
                 Voir tout <i className="ri-arrow-right-line ml-1"></i>
@@ -139,32 +146,43 @@ export default function TenantHome() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
               {products.map((product) => {
-                const imgSrc = product.product_image
-                  ? product.product_image.split('|')[0]
-                  : FALLBACK_PRODUCT_IMG;
+                const imgSrc = getProductImage(product.media) || FALLBACK_PRODUCT_IMG;
+                const price = Number(product.price || 0);
+                const promo = product.discount_enabled && product.discount_price != null;
                 return (
-                  <div key={product.product_id} className="bg-background-50 border border-background-200/70 rounded-lg overflow-hidden hover:border-background-300/60 transition-all duration-200 group">
+                  <div key={product.id} className="bg-background-50 border border-background-200/70 rounded-lg overflow-hidden hover:border-background-300/60 transition-all duration-200 group">
                     <div className="h-48 bg-background-100 overflow-hidden relative">
                       <img
                         src={imgSrc}
-                        alt={product.product_name}
+                        alt={product.name}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = FALLBACK_PRODUCT_IMG;
                         }}
                       />
-                      {product.prix_promo && (
+                      {promo && (
                         <span className="absolute top-2 left-2 px-2 py-0.5 bg-accent-500 text-background-50 rounded-full text-xs font-semibold">
                           Promo
                         </span>
                       )}
                     </div>
                     <div className="p-4">
-                      <h3 className="text-sm font-semibold text-foreground-900 mb-1 line-clamp-2">{product.product_name}</h3>
-                      <div className="flex items-center justify-between">
-                        <span className="text-base font-bold text-primary-600">
-                          {product.product_price ? `${parseFloat(product.product_price).toLocaleString()} ${tenant?.monaie || 'MAD'}` : ''}
-                        </span>
+                      <h3 className="text-sm font-semibold text-foreground-900 mb-1 line-clamp-2">{product.name}</h3>
+                      <div className="flex items-center gap-2">
+                        {promo && product.discount_price != null ? (
+                          <>
+                            <span className="text-base font-bold text-primary-600">
+                              {Number(product.discount_price).toLocaleString()} {tenant?.monaie || 'MAD'}
+                            </span>
+                            <span className="text-xs text-foreground-400 line-through">
+                              {price.toLocaleString()} {tenant?.monaie || 'MAD'}
+                            </span>
+                          </>
+                        ) : (
+                          <span className="text-base font-bold text-primary-600">
+                            {price ? `${price.toLocaleString()} ${tenant?.monaie || 'MAD'}` : ''}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -182,7 +200,7 @@ export default function TenantHome() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl md:text-2xl font-bold font-heading text-foreground-950">
                 <i className="ri-service-line mr-2 text-primary-500"></i>
-                Services
+                {servicesHeading.title}
               </h2>
               <Link to="/services" className="text-sm text-primary-600 hover:text-primary-700 font-medium cursor-pointer no-underline whitespace-nowrap">
                 Voir tout <i className="ri-arrow-right-line ml-1"></i>
@@ -215,7 +233,7 @@ export default function TenantHome() {
         <section className="py-10 md:py-16">
           <div className="w-full px-4 md:px-6 max-w-3xl mx-auto text-center">
             <h2 className="text-xl md:text-2xl font-bold font-heading text-foreground-950 mb-4">
-              &Agrave; propos de {storeName}
+              {aboutTitle}
             </h2>
             <p className="text-sm md:text-base text-foreground-500 leading-relaxed">
               {tenant.aboutus || tenant.description}
@@ -238,10 +256,10 @@ export default function TenantHome() {
               <i className="ri-mail-send-line text-xl text-accent-600"></i>
             </div>
             <h3 className="text-lg font-bold font-heading text-foreground-950 mb-2">
-              Une question ?
+              {questionHeading.title}
             </h3>
             <p className="text-sm text-foreground-500 mb-5">
-              N&apos;h&eacute;sitez pas &agrave; nous contacter pour toute demande d&apos;information.
+              {questionHeading.subtitle}
             </p>
             {tenant?.telephone && (
               <a

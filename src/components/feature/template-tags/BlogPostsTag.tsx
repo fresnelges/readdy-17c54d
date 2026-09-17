@@ -30,7 +30,7 @@ export default function BlogPostsTag() {
       .eq('status', 'published');
 
     if (isTenant && tenant) {
-      query = query.eq('author', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
 
     query

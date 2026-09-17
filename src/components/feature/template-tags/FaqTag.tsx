@@ -22,7 +22,7 @@ export default function FaqTag() {
     let query = supabase.from('blog_articles').select('id, titre, contenu, created_at');
 
     if (isTenant && tenant) {
-      query = query.eq('owner', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
 
     query

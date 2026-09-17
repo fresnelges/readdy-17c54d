@@ -26,7 +26,7 @@ export default function PortfolioTag() {
     let query = supabase.from('portfolio').select('*');
 
     if (isTenant && tenant) {
-      query = query.eq('owner', tenant.id);
+      query = query.eq('idcommerce', tenant.id);
     }
 
     query
